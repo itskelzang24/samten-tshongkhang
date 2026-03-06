@@ -1441,10 +1441,29 @@ function FinancialsTab({ onEdit }: { onEdit: (billNo: string) => void }) {
   const searchDebounce = useRef<number | null>(null);
 
   useEffect(() => {
-    // On mount, fetch today's transactions (default)
-    fetchBills({ startDate, endDate });
+    // On mount, try today's transactions; if none, fall back to recent bills
+    (async () => {
+      const list = await fetchBills({ startDate, endDate });
+      if (!list || list.length === 0) {
+        await fetchBills();
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // When the date range changes and there's no bill search active, refresh results (debounced)
+  useEffect(() => {
+    if (searchDebounce.current) window.clearTimeout(searchDebounce.current);
+    // If user is searching by bill number, don't override with date-range fetch
+    if (billSearch) return;
+    searchDebounce.current = window.setTimeout(() => {
+      fetchBills({ startDate, endDate });
+    }, 250);
+    return () => {
+      if (searchDebounce.current) window.clearTimeout(searchDebounce.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, endDate]);
 
   const fetchBills = async (opts?: { startDate?: string; endDate?: string; billNo?: string }) => {
     setLoading(true);
@@ -1459,11 +1478,23 @@ function FinancialsTab({ onEdit }: { onEdit: (billNo: string) => void }) {
       }
       const qs = new URLSearchParams(params).toString();
       const res = await fetch(`${WEB_APP_URL}?${qs}`);
+      if (!res.ok) throw new Error('Failed to fetch bills');
       const data = await res.json();
-      setBills(Array.isArray(data) ? data : []);
+      let list = Array.isArray(data) ? data : [];
+      // Normalize each bill: ensure DateTime is an ISO string and GrandTotal is a number
+      list = list.map((b: any) => ({
+        ...b,
+        DateTime: b.DateTime ? (typeof b.DateTime === 'string' ? b.DateTime : new Date(b.DateTime).toISOString()) : null,
+        GrandTotal: (b.GrandTotal !== undefined && b.GrandTotal !== null) ? Number(b.GrandTotal) : 0,
+        Subtotal: (b.Subtotal !== undefined && b.Subtotal !== null) ? Number(b.Subtotal) : 0,
+        GSTTotal: (b.GSTTotal !== undefined && b.GSTTotal !== null) ? Number(b.GSTTotal) : 0,
+      }));
+      setBills(list);
+      return list;
     } catch (err) {
       console.error(err);
       setBills([]);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -1570,7 +1601,7 @@ function FinancialsTab({ onEdit }: { onEdit: (billNo: string) => void }) {
               <tbody className="divide-y divide-slate-50">
                 {loading ? (
                   <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">Loading history...</td></tr>
-                ) : (bills || []).map((bill, idx) => (
+                ) : (bills && bills.length > 0) ? (bills || []).map((bill, idx) => (
                   <tr 
                     key={`${getBillNo(bill)}-${idx}`} 
                     className={cn(
@@ -1580,7 +1611,7 @@ function FinancialsTab({ onEdit }: { onEdit: (billNo: string) => void }) {
                     onClick={() => handleSelectBill(bill)}
                   >
                     <td className="px-6 py-4 font-bold text-slate-800">{getBillNo(bill)}</td>
-                    <td className="px-6 py-4 text-slate-500">{format(new Date(bill.DateTime), 'dd MMM, HH:mm')}</td>
+                    <td className="px-6 py-4 text-slate-500">{bill.DateTime ? format(new Date(bill.DateTime), 'dd MMM, HH:mm') : '-'}</td>
                     <td className="px-6 py-4">
                       <p className="font-medium text-slate-700">{bill.CustomerName}</p>
                       <p className="text-[10px] text-slate-400 font-bold uppercase">{bill.Method}</p>
@@ -1604,7 +1635,9 @@ function FinancialsTab({ onEdit }: { onEdit: (billNo: string) => void }) {
                       </button>
                     </td>
                   </tr>
-                ))}
+                )) : (
+                  <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">No transactions found for the selected range.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -1716,6 +1749,18 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
   const [barcodeToPrint, setBarcodeToPrint] = useState<string | null>(null);
   const barcodeRef = useRef<HTMLDivElement>(null);
+
+  // Inventory search state (search by ID or Name)
+  const [inventorySearch, setInventorySearch] = useState('');
+
+  const filteredProducts = useMemo(() => {
+    if (!inventorySearch) return products;
+    const q = inventorySearch.toLowerCase();
+    return products.filter(p =>
+      String(p.ID).toLowerCase().includes(q) ||
+      (p.Name || '').toLowerCase().includes(q)
+    );
+  }, [inventorySearch, products]);
 
   const handlePrintBarcode = useReactToPrint({
     contentRef: barcodeRef,
@@ -1844,6 +1889,19 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
       </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex items-center gap-3">
+          <Search size={16} />
+          <input
+            value={inventorySearch}
+            onChange={(e) => setInventorySearch(e.target.value)}
+            placeholder="Search inventory by ID or name..."
+            className="flex-1 bg-transparent outline-none text-sm"
+            aria-label="Search inventory"
+          />
+          {inventorySearch && (
+            <button onClick={() => setInventorySearch('')} className="text-slate-400 hover:text-slate-600">Clear</button>
+          )}
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -1859,7 +1917,7 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {(products || []).map((p) => (
+              {(filteredProducts || []).map((p) => (
                 <tr key={p.ID} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1">

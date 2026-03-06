@@ -37,7 +37,10 @@ function doGet(e) {
       case 'listCategories':
         return jsonResponse(listCategories());
       case 'listBills':
-        return jsonResponse(listBills(e.parameter.limit));
+        // Pass all query parameters to listBills for server-side filtering
+        return jsonResponse(listBills(e.parameter));
+      case 'debugBills':
+        return jsonResponse(listBillsDebug(e.parameter.limit || 20));
       case 'getDashboardData':
         return jsonResponse(getDashboardData());
       case 'login':
@@ -138,11 +141,93 @@ function listCategories() {
   return categories;
 }
 
-function listBills(limit = 100) {
-  const bills = getSheetData('Sales_Bills');
-  // Sort by DateTime descending
-  const sorted = bills.sort((a, b) => new Date(b.DateTime) - new Date(a.DateTime));
-  return sorted.slice(0, limit);
+function listBills(params) {
+  // params may be an object like { limit, start, end, billNo }
+  params = params || {};
+  const limit = params.limit ? parseInt(params.limit, 10) : 100;
+  const start = params.start ? new Date(params.start) : null;
+  const end = params.end ? new Date(params.end) : null;
+  const billNo = params.billNo ? String(params.billNo).toLowerCase() : null;
+  // Optimized implementation: only read Sales_Bills values (no header parsing), use numeric timestamps
+  const sheet = SS.getSheetByName('Sales_Bills');
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  // Read columns A-J (1..10) where headers are assumed as per project README
+  const numRows = lastRow - 1;
+  const values = sheet.getRange(2, 1, numRows, 10).getValues();
+
+  const startTs = start ? start.getTime() : null;
+  let endTs = null;
+  if (end) {
+    endTs = new Date(end);
+    if (endTs.getHours() === 0 && endTs.getMinutes() === 0 && endTs.getSeconds() === 0) {
+      endTs.setHours(23, 59, 59, 999);
+    }
+    endTs = endTs.getTime();
+  }
+
+  const results = [];
+  for (let i = 0; i < values.length; i++) {
+    const row = values[i];
+    // Columns: 0=BillNo,1=DateTime,2=CustomerName,3=Method,4=User,5=Subtotal,6=GSTTotal,7=GrandTotal,8=Status,9=UpdatedAt
+    const billNoVal = row[0] || '';
+  const dateVal = row[1];
+  const dt = dateVal instanceof Date ? dateVal : new Date(dateVal);
+  const ts = isNaN(dt) ? null : dt.getTime();
+  // Use spreadsheet timezone and date-only comparison to avoid timezone edge-cases at midnight
+  const tz = SS.getSpreadsheetTimeZone ? SS.getSpreadsheetTimeZone() : Session.getScriptTimeZone();
+  const rowDateStr = (ts) ? Utilities.formatDate(new Date(ts), tz, 'yyyy-MM-dd') : null;
+  const startStr = params.start ? String(params.start) : null;
+  const endStr = params.end ? String(params.end) : null;
+    // BillNo filter
+    if (billNo && !String(billNoVal).toLowerCase().includes(billNo)) {
+      continue;
+    }
+
+  // Date range filter (compare date strings to avoid timezone shifts)
+  if ((startStr || endStr) && !rowDateStr) continue;
+  if (startStr && rowDateStr < startStr) continue;
+  if (endStr && rowDateStr > endStr) continue;
+
+    results.push({
+      BillNo: billNoVal,
+      DateTime: dt,
+      CustomerName: row[2],
+      Method: row[3],
+      User: row[4],
+      Subtotal: row[5],
+      GSTTotal: row[6],
+      GrandTotal: row[7],
+      Status: row[8],
+      UpdatedAt: row[9]
+    });
+  }
+
+  // Sort by timestamp descending
+  results.sort((a, b) => new Date(b.DateTime) - new Date(a.DateTime));
+  if (results.length > limit) results.length = limit;
+  return results;
+}
+
+function listBillsDebug(limit = 20) {
+  const sheet = SS.getSheetByName('Sales_Bills');
+  if (!sheet) return { error: 'Sales_Bills sheet not found' };
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 1) return { headers: [], rows: [] };
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const readCount = Math.min(Math.max(0, lastRow - 1), parseInt(limit, 10));
+  const rows = readCount > 0 ? sheet.getRange(2, 1, readCount, lastCol).getValues() : [];
+
+  return {
+    lastRow,
+    lastCol,
+    headers,
+    rows
+  };
 }
 
 function saveProduct(body) {
