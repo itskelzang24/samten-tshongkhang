@@ -1435,19 +1435,35 @@ function FinancialsTab({ onEdit }: { onEdit: (billNo: string) => void }) {
   const [loading, setLoading] = useState(true);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [selectedLoading, setSelectedLoading] = useState(false);
+  const [startDate, setStartDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [billSearch, setBillSearch] = useState('');
+  const searchDebounce = useRef<number | null>(null);
 
   useEffect(() => {
-    fetchBills();
+    // On mount, fetch today's transactions (default)
+    fetchBills({ startDate, endDate });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchBills = async () => {
+  const fetchBills = async (opts?: { startDate?: string; endDate?: string; billNo?: string }) => {
     setLoading(true);
     try {
-      const res = await fetch(`${WEB_APP_URL}?action=listBills&limit=50`);
+      const params: Record<string, string> = { action: 'listBills', limit: '200' };
+      if (opts?.billNo) {
+        params.billNo = opts.billNo;
+      } else {
+        // if no billNo search provided, use date range if available
+        if (opts?.startDate) params.start = opts.startDate;
+        if (opts?.endDate) params.end = opts.endDate;
+      }
+      const qs = new URLSearchParams(params).toString();
+      const res = await fetch(`${WEB_APP_URL}?${qs}`);
       const data = await res.json();
-      setBills(data);
+      setBills(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
+      setBills([]);
     } finally {
       setLoading(false);
     }
@@ -1459,6 +1475,22 @@ function FinancialsTab({ onEdit }: { onEdit: (billNo: string) => void }) {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Financials");
     XLSX.writeFile(workbook, "Financial_Report.xlsx");
   };
+
+  // Debounced bill search: when billSearch changes, query remote for matching bill number
+  useEffect(() => {
+    if (searchDebounce.current) window.clearTimeout(searchDebounce.current);
+    // If search string is empty, show date range results
+    if (!billSearch) {
+      // small delay to avoid double-calls
+      searchDebounce.current = window.setTimeout(() => fetchBills({ startDate, endDate }), 250);
+      return;
+    }
+    searchDebounce.current = window.setTimeout(() => {
+      fetchBills({ billNo: billSearch });
+    }, 250);
+    return () => { if (searchDebounce.current) window.clearTimeout(searchDebounce.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billSearch]);
 
   const getBillNo = (bill: any) => bill?.BillNo || bill?.['Bill No'] || bill?.billNo || 'N/A';
 
@@ -1491,9 +1523,33 @@ function FinancialsTab({ onEdit }: { onEdit: (billNo: string) => void }) {
             <Save size={18} />
             EXPORT EXCEL
           </button>
-          <button onClick={fetchBills} className="p-2 hover:bg-white rounded-xl border border-slate-200 text-slate-500 transition-all">
+          <button onClick={() => fetchBills({ startDate, endDate })} className="p-2 hover:bg-white rounded-xl border border-slate-200 text-slate-500 transition-all">
             <History size={20} />
           </button>
+        </div>
+      </div>
+
+      {/* Filters: date range and bill number search */}
+      <div className="mt-4 mb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-slate-500 mr-2">Start</label>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+          <label className="text-xs text-slate-500 ml-3 mr-2">End</label>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+          <button onClick={() => fetchBills({ startDate, endDate })} className="ml-3 px-3 py-2 bg-brand text-white rounded-lg text-sm font-bold">Fetch</button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            type="search"
+            placeholder="Search by Bill No"
+            value={billSearch}
+            onChange={(e) => setBillSearch(e.target.value.trim())}
+            className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+          />
+          {billSearch && (
+            <button onClick={() => { setBillSearch(''); fetchBills({ startDate, endDate }); }} className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm">Clear</button>
+          )}
         </div>
       </div>
 
