@@ -1,0 +1,5 @@
+{
+  "name": "Samten Inventory",
+  "description": "A comprehensive POS and Inventory management system for supermarkets, featuring real-time stock tracking, bill editing with reversals, and thermal receipt printing.",
+  "requestFramePermissions": []
+}

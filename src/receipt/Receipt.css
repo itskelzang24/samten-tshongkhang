@@ -1,0 +1,44 @@
+/* Thermal receipt CSS - designed for 80mm paper, 72mm printable width */
+:root{--receipt-width:72mm;--font-family: 'Courier New', monospace;--font-size:12px}
+html,body{margin:0;padding:0}
+.receipt-root{font-family:var(--font-family);font-size:var(--font-size);color:#000}
+.receipt{
+  width:var(--receipt-width);
+  margin:0 auto;
+  padding:6px 6px 12px 6px;
+  box-sizing:border-box;
+}
+.receipt .center{text-align:center}
+.receipt .header{font-weight:700;letter-spacing:0.5px}
+.receipt .muted{color:#444;font-size:11px}
+.receipt .divider{border-top:1px dashed #222;margin:8px 0}
+.receipt .bill-info{font-size:12px;margin-bottom:6px}
+.receipt .bill-info .row{display:flex;justify-content:space-between}
+
+/* Item table - fixed layout to avoid shifting */
+.receipt .items{width:100%;border-collapse:collapse;font-size:12px}
+.receipt .items thead th{font-size:11px;text-align:left;padding:4px 0}
+.receipt .items tbody td{padding:2px 0;vertical-align:top}
+.receipt .col-item{width:58%;word-break:break-word}
+.receipt .col-qty{width:12%;text-align:right;padding-left:6px}
+.receipt .col-total{width:30%;text-align:right;padding-left:6px}
+.receipt .price-note{font-size:10px;color:#444}
+
+.receipt .totals{margin-top:6px}
+.receipt .totals .row{display:flex;justify-content:space-between;padding:2px 0}
+.receipt .grand{font-weight:800;font-size:16px;margin-top:6px}
+
+.receipt .footer{margin-top:8px;font-size:11px;text-align:center;color:#333}
+
+/* Make sure print page matches preview exactly */
+@page{size:80mm auto;margin:0}
+@media print{
+  html,body{width:var(--receipt-width);}
+  body{margin:0;padding:0}
+  .receipt{box-shadow:none;margin:0;padding:6px}
+  /* remove background adjustments */
+  *{ -webkit-print-color-adjust: exact; }
+}
+
+/* Accessibility */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
