@@ -26,6 +26,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Lock,
+  Eye,
+  EyeOff,
   LogOut,
   ShieldCheck,
   Users as UsersIcon
@@ -1061,6 +1063,7 @@ export default function App() {
 function LoginScreen({ onLogin, fetchConfig }: { onLogin: (user: UserProfile) => void, fetchConfig: () => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -1133,12 +1136,20 @@ function LoginScreen({ onLogin, fetchConfig }: { onLogin: (user: UserProfile) =>
               </div>
               <input 
                 required
-                type="password" 
-                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all font-medium"
+                type={showPassword ? 'text' : 'password'}
+                className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all font-medium"
                 placeholder="Enter password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              <button
+                type="button"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                onClick={() => setShowPassword(s => !s)}
+                className="absolute inset-y-0 right-3 flex items-center text-slate-500 hover:text-slate-700 transition-colors"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
           </div>
 
