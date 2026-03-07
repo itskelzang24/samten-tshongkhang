@@ -1544,7 +1544,19 @@ function FinancialsTab({ onEdit }: { onEdit: (billNo: string) => void }) {
   };
 
   const exportToExcel = () => {
-    const worksheet = XLSX.utils.json_to_sheet(bills);
+    // Ensure DateTime is exported in a consistent local format so Excel shows the
+    // correct transaction time (avoid timezone/ISO string mismatches).
+    const exportData = bills.map(b => ({
+      BillNo: getBillNo(b),
+      DateTime: b.DateTime ? format(new Date(b.DateTime), 'yyyy-MM-dd HH:mm') : '',
+      Customer: (b.CustomerName || b.Customer || ''),
+      Total: (b.GrandTotal !== undefined ? Number(b.GrandTotal) : ''),
+      Subtotal: (b.Subtotal !== undefined ? Number(b.Subtotal) : ''),
+      GSTTotal: (b.GSTTotal !== undefined ? Number(b.GSTTotal) : ''),
+      Status: b.Status || ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Financials");
     XLSX.writeFile(workbook, "Financial_Report.xlsx");
