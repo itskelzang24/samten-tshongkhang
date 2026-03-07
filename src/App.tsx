@@ -1182,8 +1182,15 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
   const [loading, setLoading] = useState(false);
   const [perms, setPerms] = useState<Record<string, boolean>>(config?.staff_perms || {});
 
+  const [gstPercent, setGstPercent] = useState<number>((config?.gst_rate || 0) * 100);
+  const [billPrefix, setBillPrefix] = useState<string>(config?.bill_prefix || '');
+
   useEffect(() => {
     if (config) setPerms(config.staff_perms);
+    if (config) {
+      setGstPercent((config.gst_rate || 0) * 100);
+      setBillPrefix(config.bill_prefix || '');
+    }
   }, [config]);
 
   const handleSavePerms = async () => {
@@ -1272,23 +1279,59 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">GST Rate (%)</label>
               <input 
-                disabled
-                type="text" 
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-500"
-                value={(config?.gst_rate || 0) * 100}
+                type="number" 
+                min={0}
+                max={100}
+                step={0.01}
+                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700"
+                value={gstPercent}
+                onChange={(e) => setGstPercent(parseFloat(e.target.value) || 0)}
               />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Bill Prefix</label>
               <input 
-                disabled
                 type="text" 
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-500"
-                value={config?.bill_prefix}
+                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700"
+                value={billPrefix}
+                onChange={(e) => setBillPrefix(e.target.value)}
               />
             </div>
           </div>
-          <p className="mt-6 text-[10px] text-slate-400 italic">Advanced settings can be modified directly in the "System_Config" sheet.</p>
+          <div className="mt-6 flex gap-3">
+            <button 
+              disabled={loading}
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  // Convert percent to decimal
+                  const gstDecimal = (isNaN(gstPercent) ? 0 : gstPercent) / 100;
+                  const res = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'updateConfig', gst_rate: gstDecimal, bill_prefix: billPrefix })
+                  });
+                  const data = await res.json();
+                  if (data && data.success) {
+                    onRefresh();
+                    alert('General configuration updated successfully');
+                  } else {
+                    throw new Error(data && data.error ? data.error : 'Failed to update config');
+                  }
+                } catch (err) {
+                  console.error(err);
+                  alert('Failed to save configuration: ' + (err && err.message ? err.message : err));
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="flex-1 py-3 bg-brand text-white rounded-xl font-bold shadow-lg shadow-brand-light hover:bg-brand-hover transition-all flex items-center justify-center gap-2"
+            >
+              {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={18} />}
+              SAVE CONFIG
+            </button>
+            <button onClick={() => { if (config) { setGstPercent((config.gst_rate||0)*100); setBillPrefix(config.bill_prefix||''); } }} className="py-3 px-4 bg-white border border-slate-200 rounded-xl font-bold">RESET</button>
+          </div>
+          <p className="mt-3 text-[10px] text-slate-400 italic">Advanced settings can also be modified directly in the <code>System_Config</code> sheet.</p>
         </div>
       </div>
     </div>
