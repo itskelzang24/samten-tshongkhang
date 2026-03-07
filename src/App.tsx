@@ -2281,22 +2281,26 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
 
       {/* BARCODE PRINT LAYOUT */}
       <div className="fixed -left-[9999px] top-0 pointer-events-none bg-white">
-        <div ref={barcodeRef} className="p-4 bg-white text-center inline-block text-black">
-          {barcodeToPrint && (
-            <>
-              <p className="text-[10px] font-bold mb-1 uppercase tracking-widest">Samten Inventory</p>
-              <BarcodeComponent 
-                value={barcodeToPrint} 
-                width={1.5}
-                height={50}
-                fontSize={12}
-                margin={0}
-              />
-              <p className="text-[10px] font-bold mt-1 uppercase tracking-widest">
-                {products.find(p => p.ID.toString() === barcodeToPrint)?.Name}
-              </p>
-            </>
-          )}
+        <div ref={barcodeRef} className="p-2 bg-white text-center inline-block text-black">
+          {barcodeToPrint && (() => {
+            const prod = products.find(p => p.ID.toString() === barcodeToPrint);
+            if (!prod) return null;
+            return (
+              <>
+                <BarcodeComponent 
+                  value={barcodeToPrint} 
+                  width={1.5}
+                  height={50}
+                  displayValue={false}
+                  margin={0}
+                />
+                <div className="mt-1">
+                  <div className="text-sm font-bold text-slate-900">{prod.Name}</div>
+                  <div className="text-base font-black text-slate-900">Nu. {Number(prod.Selling).toFixed(2)}</div>
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
     </div>
