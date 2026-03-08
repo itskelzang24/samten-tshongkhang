@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, Component } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, Component, Suspense } from 'react';
 import { 
   LayoutDashboard, 
   ShoppingCart, 
@@ -47,7 +47,8 @@ import {
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { format } from 'date-fns';
-import BarcodeComponent from 'react-barcode';
+// Lazy-load barcode to reduce initial bundle size and speed up first paint
+const BarcodeComponent = React.lazy(() => import('react-barcode'));
 import * as XLSX from 'xlsx';
 import { useReactToPrint } from 'react-to-print';
 
@@ -211,16 +212,8 @@ export default function App() {
   const searchRef = useRef<HTMLDivElement>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch initial data
-  useEffect(() => {
-    const init = async () => {
-      await Promise.all([fetchConfig(), fetchProducts(), fetchDashboardData()]);
-      setInitialLoading(false);
-    };
-    init();
-  }, []);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       const res = await fetch(`${WEB_APP_URL}?action=getDashboardData`);
       if (!res.ok) throw new Error('Failed to fetch dashboard data');
@@ -235,7 +228,7 @@ export default function App() {
       console.error('Dashboard data fetch error:', err);
       // Keep existing data or empty state on error
     }
-  };
+  }, []);
 
   // Handle clicks outside search suggestions
   useEffect(() => {
@@ -248,7 +241,7 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     try {
       const res = await fetch(`${WEB_APP_URL}?action=getConfig`);
       const data = await res.json();
@@ -256,9 +249,9 @@ export default function App() {
     } catch (err) {
       console.error('Failed to fetch config', err);
     }
-  };
+  }, []);
 
-  const fetchProducts = async (q = '') => {
+  const fetchProducts = useCallback(async (q = '') => {
     try {
       const res = await fetch(`${WEB_APP_URL}?action=listProducts&q=${q}`);
       const data = await res.json();
@@ -266,47 +259,81 @@ export default function App() {
     } catch (err) {
       console.error('Failed to fetch products', err);
     }
-  };
-
-  const addToCart = (product: Product) => {
-    const existing = cart.find(item => item.ID === product.ID && item.lineType === 'SALE');
-    if (existing) {
-      updateCartQty(product.ID, existing.qty + 1, 'SALE');
-    } else {
-      setCart([...cart, { 
-        ...product, 
-        qty: 1, 
-        rate: product.Selling, 
-        lineType: 'SALE',
-        gstRate: config?.gst_rate || 0.05
-      }]);
+  }, []);
+  // Paginated fetch: if start > 0 append, otherwise replace
+  const PAGE_SIZE = 100;
+  const fetchProductsPaged = useCallback(async (q = '', start = 0, limit = PAGE_SIZE) => {
+    try {
+      const qs = new URLSearchParams({ action: 'listProducts', q: q || '', limit: String(limit), start: String(start) }).toString();
+      const res = await fetch(`${WEB_APP_URL}?${qs}`);
+      const data = await res.json();
+      if (start && start > 0) {
+        setProducts(prev => [...prev, ...data]);
+      } else {
+        setProducts(Array.isArray(data) ? data : []);
+      }
+      return data;
+    } catch (err) {
+      console.error('Failed to fetch products (paged)', err);
+      return [];
     }
+  }, []);
+
+  // Fetch single product by ID using new API
+  const fetchProductById = useCallback(async (id: string | number) => {
+    try {
+      const res = await fetch(`${WEB_APP_URL}?action=getProduct&productId=${encodeURIComponent(String(id))}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data || null;
+    } catch (err) {
+      console.error('Failed to fetch product by id', err);
+      return null;
+    }
+  }, []);
+
+  // Fetch initial data once on mount. We rely on stable callbacks above.
+  useEffect(() => {
+    let mounted = true;
+    const init = async () => {
+      await Promise.all([fetchConfig(), fetchProducts(), fetchDashboardData()]);
+      if (mounted) setInitialLoading(false);
+    };
+    init();
+    return () => { mounted = false; };
+  }, [fetchConfig, fetchProducts, fetchDashboardData]);
+
+  const addToCart = useCallback((product: Product) => {
+    if (loading) return; // prevent adding while save/update in progress
+    setCart(prev => {
+      const existing = prev.find(item => item.ID === product.ID && item.lineType === 'SALE');
+      if (existing) {
+        return prev.map(item => (item.ID === product.ID && item.lineType === 'SALE') ? { ...item, qty: item.qty + 1 } : item);
+      }
+      return [...prev, { ...product, qty: 1, rate: product.Selling, lineType: 'SALE', gstRate: config?.gst_rate || 0.05 }];
+    });
     setSearchQuery('');
     setShowSuggestions(false);
-  };
+  }, [config?.gst_rate, loading]);
 
-  const updateCartQty = (id: string | number, qty: number, lineType: 'SALE' | 'RETURN') => {
-    if (qty <= 0) {
-      setCart(cart.filter(item => !(item.ID === id && item.lineType === lineType)));
-      return;
-    }
-    setCart(cart.map(item => 
-      (item.ID === id && item.lineType === lineType) ? { ...item, qty } : item
-    ));
-  };
+  const updateCartQty = useCallback((id: string | number, qty: number, lineType: 'SALE' | 'RETURN') => {
+    if (loading) return; // block changes while saving
+    setCart(prev => {
+      if (qty <= 0) return prev.filter(item => !(item.ID === id && item.lineType === lineType));
+      return prev.map(item => (item.ID === id && item.lineType === lineType) ? { ...item, qty } : item);
+    });
+  }, [loading]);
 
-  const updateCartRate = (id: string | number, rate: number, lineType: 'SALE' | 'RETURN') => {
-    setCart(cart.map(item => 
-      (item.ID === id && item.lineType === lineType) ? { ...item, rate } : item
-    ));
-  };
+  const updateCartRate = useCallback((id: string | number, rate: number, lineType: 'SALE' | 'RETURN') => {
+    if (loading) return; // block rate changes while saving
+    setCart(prev => prev.map(item => (item.ID === id && item.lineType === lineType) ? { ...item, rate } : item));
+  }, [loading]);
 
-  const toggleLineType = (id: string | number, currentType: 'SALE' | 'RETURN') => {
+  const toggleLineType = useCallback((id: string | number, currentType: 'SALE' | 'RETURN') => {
+    if (loading) return; // block toggles while saving
     const newType = currentType === 'SALE' ? 'RETURN' : 'SALE';
-    setCart(cart.map(item => 
-      (item.ID === id && item.lineType === currentType) ? { ...item, lineType: newType } : item
-    ));
-  };
+    setCart(prev => prev.map(item => (item.ID === id && item.lineType === currentType) ? { ...item, lineType: newType } : item));
+  }, [loading]);
 
   const subtotal = useMemo(() => {
     return cart.reduce((acc, item) => {
@@ -325,7 +352,7 @@ export default function App() {
 
   const grandTotal = subtotal + gstTotal;
 
-  const handleCheckout = async () => {
+  const handleCheckout = useCallback(async () => {
     if (cart.length === 0) return;
     setLoading(true);
     setMessage(null);
@@ -341,7 +368,7 @@ export default function App() {
         billNo = data.billNo;
       }
 
-      const payload = {
+      const payload: any = {
         action: 'saveBill',
         billNo,
         customerName,
@@ -356,6 +383,8 @@ export default function App() {
           gstRate: item.gstRate
         }))
       };
+      // If we're updating an existing bill, ask backend to lock it after save
+      if (isEditing) payload.lock = true;
 
       const saveRes = await fetch(WEB_APP_URL, {
         method: 'POST',
@@ -414,21 +443,20 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [cart, customerName, paymentMethod, currentUser, isEditing, returnToTab, fetchProducts, fetchDashboardData]);
 
-  const resetPOS = () => {
+  const resetPOS = useCallback(() => {
     setCart([]);
     setCustomerName('Walk-in Customer');
     setPaymentMethod('CASH');
     setIsEditing(null);
-    // if we were editing originating from another tab, return to it (Financials -> History)
     if (returnToTab) {
       setActiveTab(returnToTab);
       setReturnToTab(null);
     }
-  };
+  }, [returnToTab]);
 
-  const handleBarcodeSearch = (e: React.FormEvent) => {
+  const handleBarcodeSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     const barcode = searchQuery.trim();
     if (!barcode) return;
@@ -438,26 +466,35 @@ export default function App() {
       addToCart(product);
       setSearchQuery('');
     } else {
-      // If not found, maybe it's a partial name search
       setShowSuggestions(true);
     }
-  };
+  }, [searchQuery, products, addToCart]);
 
-  const editExistingBill = async (billNo: string) => {
+  const editExistingBill = useCallback(async (billNo: string) => {
     if (!billNo || billNo === 'N/A') {
       setMessage({ type: 'error', text: 'Invalid Bill Number' });
       return;
     }
-    // remember where we came from so we can return after editing
-    setReturnToTab(activeTab);
-    // Navigate to POS immediately to improve perceived responsiveness
-    setActiveTab('pos');
+    // We'll fetch the bill first and only switch to POS if it's editable.
     setLoading(true);
     try {
       const res = await fetch(`${WEB_APP_URL}?action=getBill&billNo=${billNo}`);
       const bill = await res.json();
       if (bill && (bill.BillNo || bill['Bill No'])) {
         const actualBillNo = bill.BillNo || bill['Bill No'];
+        // If the bill is locked, do not allow editing — present the bill details
+        // and ask the user to explicitly reopen it first.
+        if (bill.Status && String(bill.Status).toUpperCase() === 'LOCKED') {
+          // Inform user and return them to Financials to reopen the bill there
+          setMessage({ type: 'error', text: `Bill ${actualBillNo} is locked. Reopen it from Financials to edit.` });
+          setActiveTab('financials');
+          return;
+        }
+
+        // remember where we came from so we can return after editing
+        setReturnToTab(activeTab);
+        // Navigate to POS to perform edits
+        setActiveTab('pos');
         setIsEditing(actualBillNo);
         setCustomerName(bill.CustomerName || 'Walk-in Customer');
         setPaymentMethod(bill.Method || 'CASH');
@@ -485,7 +522,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setCart, setCustomerName, setPaymentMethod, setIsEditing, setMessage, setLoading, returnToTab, setActiveTab]);
 
   const filteredSuggestions = useMemo(() => {
     if (!searchQuery) return [];
@@ -661,7 +698,12 @@ export default function App() {
                         <button
                           key={p.ID}
                           onClick={() => addToCart(p)}
-                          className="w-full flex items-center justify-between p-4 hover:bg-brand-light transition-colors border-b border-slate-50 last:border-0 group"
+                          disabled={loading}
+                          title={loading ? 'Update in progress' : undefined}
+                          className={cn(
+                            "w-full flex items-center justify-between p-4 transition-colors border-b border-slate-50 last:border-0 group",
+                            loading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-brand-light'
+                          )}
                         >
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-hover:bg-brand-light group-hover:text-brand transition-colors">
@@ -731,11 +773,12 @@ export default function App() {
                             <td className="px-6 py-4">
                               <button
                                 onClick={() => toggleLineType(item.ID, item.lineType)}
+                                disabled={loading}
+                                title={loading ? 'Update in progress' : undefined}
                                 className={cn(
                                   "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all",
-                                  item.lineType === 'SALE' 
-                                    ? "bg-brand-light text-brand hover:bg-brand-border" 
-                                    : "bg-red-100 text-red-700 hover:bg-red-200"
+                                  item.lineType === 'SALE' ? "bg-brand-light text-brand" : "bg-red-100 text-red-700",
+                                  loading ? 'opacity-60 cursor-not-allowed' : (item.lineType === 'SALE' ? 'hover:bg-brand-border' : 'hover:bg-red-200')
                                 )}
                               >
                                 {item.lineType}
@@ -745,14 +788,24 @@ export default function App() {
                               <div className="flex items-center justify-center gap-3">
                                 <button 
                                   onClick={() => updateCartQty(item.ID, item.qty - 1, item.lineType)}
-                                  className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-white hover:border-brand hover:text-brand transition-all"
+                                  disabled={loading}
+                                  title={loading ? 'Update in progress' : undefined}
+                                  className={cn(
+                                    "w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all",
+                                    loading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white hover:border-brand hover:text-brand'
+                                  )}
                                 >
                                   <Minus size={14} />
                                 </button>
                                 <span className="w-8 text-center font-bold text-slate-700">{item.qty}</span>
                                 <button 
                                   onClick={() => updateCartQty(item.ID, item.qty + 1, item.lineType)}
-                                  className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-white hover:border-brand hover:text-brand transition-all"
+                                  disabled={loading}
+                                  title={loading ? 'Update in progress' : undefined}
+                                  className={cn(
+                                    "w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all",
+                                    loading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white hover:border-brand hover:text-brand'
+                                  )}
                                 >
                                   <Plus size={14} />
                                 </button>
@@ -763,9 +816,14 @@ export default function App() {
                                 <span className="text-slate-400">Nu.</span>
                                 <input
                                   type="number"
-                                  className="w-20 text-right font-bold text-slate-700 bg-transparent border-b border-transparent hover:border-slate-200 focus:border-brand outline-none transition-all p-1"
+                                  className={cn(
+                                    "w-20 text-right font-bold text-slate-700 bg-transparent border-b border-transparent focus:border-brand outline-none transition-all p-1",
+                                    loading ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-200'
+                                  )}
                                   value={item.rate}
                                   onChange={(e) => updateCartRate(item.ID, parseFloat(e.target.value) || 0, item.lineType)}
+                                  disabled={loading}
+                                  title={loading ? 'Update in progress' : undefined}
                                 />
                               </div>
                             </td>
@@ -778,7 +836,12 @@ export default function App() {
                             <td className="px-6 py-4 text-right">
                               <button 
                                 onClick={() => updateCartQty(item.ID, 0, item.lineType)}
-                                className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                disabled={loading}
+                                title={loading ? 'Update in progress' : undefined}
+                                className={cn(
+                                  "p-2 text-slate-300 transition-colors opacity-0 group-hover:opacity-100",
+                                  loading ? 'opacity-60 cursor-not-allowed' : 'hover:text-red-500'
+                                )}
                               >
                                 <Trash2 size={18} />
                               </button>
@@ -877,13 +940,14 @@ export default function App() {
                     <button
                       disabled={cart.length === 0 || loading}
                       onClick={handleCheckout}
+                      title={loading ? 'Update in progress' : (cart.length === 0 ? 'Add items to enable checkout' : undefined)}
                       className={cn(
                         "w-full py-4 rounded-2xl flex items-center justify-center gap-3 text-lg font-black tracking-tight transition-all shadow-xl",
                         // If cart is empty, show disabled grey style. If loading or active, keep brand color.
                         cart.length === 0
                           ? "bg-slate-100 text-slate-400 cursor-not-allowed"
                           : (loading
-                              ? "bg-brand text-white shadow-brand-light cursor-not-allowed"
+                              ? "bg-brand text-white shadow-brand-light cursor-not-allowed opacity-70"
                               : "bg-brand text-white hover:bg-brand-hover shadow-brand-light active:scale-[0.98]")
                       )}
                     >
@@ -925,7 +989,7 @@ export default function App() {
         )}
 
         {activeTab === 'financials' && (
-          <FinancialsTab onEdit={editExistingBill} />
+          <FinancialsTab onEdit={editExistingBill} onNotify={setMessage} />
         )}
 
         {activeTab === 'inventory' && isAllowed('inventory') && (
@@ -1156,10 +1220,11 @@ function LoginScreen({ onLogin, fetchConfig }: { onLogin: (user: UserProfile) =>
           <button 
             disabled={loading}
             onClick={() => { /* click handled by form submit */ }}
+            title={loading ? 'Signing in...' : undefined}
             className={cn(
               "w-full py-4 rounded-2xl font-black text-lg shadow-xl flex items-center justify-center gap-3 transition-all",
               loading
-                ? "bg-brand text-white shadow-brand-light cursor-not-allowed"
+                ? "bg-brand text-white shadow-brand-light opacity-60 cursor-not-allowed"
                 : "bg-brand text-white hover:bg-brand-hover active:scale-[0.98] shadow-brand-light"
             )}
           >
@@ -1257,10 +1322,14 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
           <button 
             disabled={loading}
             onClick={handleSavePerms}
-            className="mt-6 w-full py-3 bg-brand text-white rounded-xl font-bold shadow-lg shadow-brand-light hover:bg-brand-hover transition-all flex items-center justify-center gap-2"
+            title={loading ? 'Saving permissions...' : undefined}
+            className={cn(
+              "mt-6 w-full py-3 rounded-xl font-bold shadow-lg shadow-brand-light transition-all flex items-center justify-center gap-2",
+              loading ? 'bg-brand text-white opacity-60 cursor-not-allowed' : 'bg-brand text-white hover:bg-brand-hover'
+            )}
           >
             {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={18} />}
-            SAVE PERMISSIONS
+            <span className="ml-2">SAVE PERMISSIONS</span>
           </button>
         </div>
 
@@ -1301,6 +1370,7 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
           <div className="mt-6 flex gap-3">
             <button 
               disabled={loading}
+              title={loading ? 'Saving configuration...' : undefined}
               onClick={async () => {
                 setLoading(true);
                 try {
@@ -1324,10 +1394,13 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
                   setLoading(false);
                 }
               }}
-              className="flex-1 py-3 bg-brand text-white rounded-xl font-bold shadow-lg shadow-brand-light hover:bg-brand-hover transition-all flex items-center justify-center gap-2"
+              className={cn(
+                "flex-1 py-3 rounded-xl font-bold shadow-lg shadow-brand-light flex items-center justify-center gap-2 transition-all",
+                loading ? 'bg-brand text-white opacity-60 cursor-not-allowed' : 'bg-brand text-white hover:bg-brand-hover'
+              )}
             >
               {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={18} />}
-              SAVE CONFIG
+              <span className="ml-2">SAVE CONFIG</span>
             </button>
             <button onClick={() => { if (config) { setGstPercent((config.gst_rate||0)*100); setBillPrefix(config.bill_prefix||''); } }} className="py-3 px-4 bg-white border border-slate-200 rounded-xl font-bold">RESET</button>
           </div>
@@ -1473,7 +1546,7 @@ function DashboardTab({ data, onRefresh, onGoToInventory }: { data: any, onRefre
 /**
  * FINANCIALS TAB
  */
-function FinancialsTab({ onEdit }: { onEdit: (billNo: string) => void }) {
+function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void, onNotify: (m: { type: 'success' | 'error', text: string } | null) => void }) {
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
@@ -1704,13 +1777,44 @@ function FinancialsTab({ onEdit }: { onEdit: (billNo: string) => void }) {
               <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                 <h3 className="font-bold text-slate-800">Bill Details</h3>
                 <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => onEdit(getBillNo(selectedBill))}
-                    className="p-1.5 text-brand hover:bg-brand/10 rounded-lg transition-all flex items-center gap-1 text-[10px] font-bold uppercase"
-                  >
-                    <Edit size={14} />
-                    EDIT
-                  </button>
+                  {selectedBill.Status && String(selectedBill.Status).toUpperCase() === 'LOCKED' ? (
+                    <button
+                      onClick={async () => {
+                        try {
+                          setSelectedLoading(true);
+                          const res = await fetch(WEB_APP_URL, {
+                            method: 'POST',
+                            body: JSON.stringify({ action: 'reopenBill', billNo: getBillNo(selectedBill) })
+                          });
+                          const data = await res.json();
+                          if (data && data.success) {
+                            onNotify && onNotify({ type: 'success', text: `Bill ${getBillNo(selectedBill)} reopened for editing` });
+                            // Now invoke edit flow to load into POS
+                            onEdit(getBillNo(selectedBill));
+                          } else {
+                            onNotify && onNotify({ type: 'error', text: data?.error || 'Failed to reopen bill' });
+                          }
+                        } catch (err: any) {
+                          console.error('Failed to reopen bill', err);
+                          onNotify && onNotify({ type: 'error', text: `Failed to reopen bill: ${err.message || err}` });
+                        } finally {
+                          setSelectedLoading(false);
+                        }
+                      }}
+                      className="p-1.5 text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-lg transition-all flex items-center gap-1 text-[10px] font-bold uppercase"
+                    >
+                      <Lock size={14} />
+                      REOPEN
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => onEdit(getBillNo(selectedBill))}
+                      className="p-1.5 text-brand hover:bg-brand/10 rounded-lg transition-all flex items-center gap-1 text-[10px] font-bold uppercase"
+                    >
+                      <Edit size={14} />
+                      EDIT
+                    </button>
+                  )}
                   <span className="text-xs font-bold text-brand">{getBillNo(selectedBill)}</span>
                 </div>
               </div>
@@ -1804,6 +1908,7 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
   const [barcodeToPrint, setBarcodeToPrint] = useState<string | null>(null);
   const barcodeRef = useRef<HTMLDivElement>(null);
+  const [printProduct, setPrintProduct] = useState<Product | null>(null);
 
   // Inventory search state (search by ID or Name)
   const [inventorySearch, setInventorySearch] = useState('');
@@ -1817,17 +1922,56 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
     );
   }, [inventorySearch, products]);
 
-  const handlePrintBarcode = useReactToPrint({
-    contentRef: barcodeRef,
-    documentTitle: `Barcode_${barcodeToPrint || 'Label'}`,
-  });
+  const handlePrintBarcode = useReactToPrint({ contentRef: barcodeRef, documentTitle: `Barcode_${barcodeToPrint || 'Label'}` });
 
-  const printBarcode = (id: string) => {
+  // When barcodeToPrint changes, ensure we have the product data to render
+  // in the hidden print area. If the product isn't present in the current
+  // `products` array (paged fetch), fetch the single product from the
+  // backend using the `getProduct` endpoint. Once product data is ready,
+  // trigger the print. This makes printing robust when using pagination.
+  useEffect(() => {
+    if (!barcodeToPrint) {
+      setPrintProduct(null);
+      return;
+    }
+
+    let mounted = true;
+    const triggerPrint = () => {
+      const t = setTimeout(() => {
+        try { handlePrintBarcode(); } catch (e) { console.error(e); }
+      }, 250);
+      return () => clearTimeout(t);
+    };
+
+    // Try to find the product in the currently loaded products first.
+    const existing = products.find(p => String(p.ID) === String(barcodeToPrint));
+    if (existing) {
+      setPrintProduct(existing);
+      return triggerPrint();
+    }
+
+    // Otherwise fetch the single product via the API.
+    (async () => {
+      try {
+        const res = await fetch(`${WEB_APP_URL}?action=getProduct&productId=${encodeURIComponent(String(barcodeToPrint))}`);
+        if (!mounted) return;
+        if (!res.ok) return;
+        const data = await res.json();
+        setPrintProduct(data || null);
+        if (mounted) {
+          triggerPrint();
+        }
+      } catch (err) {
+        console.error('Failed to fetch product for printing', err);
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, [barcodeToPrint, products, handlePrintBarcode]);
+
+  const printBarcode = useCallback((id: string) => {
     setBarcodeToPrint(id);
-    setTimeout(() => {
-      handlePrintBarcode();
-    }, 300);
-  };
+  }, []);
 
   const exportToExcel = () => {
     const worksheet = XLSX.utils.json_to_sheet(products);
@@ -2064,17 +2208,24 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
                 <button 
                   type="button"
                   onClick={() => setShowAddCategoryModal(false)}
-                  className="flex-1 py-3 bg-white border border-slate-200 text-slate-500 rounded-xl font-bold hover:bg-slate-50 transition-all"
+                  className={cn(
+                    "flex-1 py-3 rounded-xl font-bold transition-all",
+                    "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+                  )}
                 >
                   CANCEL
                 </button>
                 <button 
                   type="submit"
                   disabled={loading}
-                  className="flex-1 py-3 bg-brand text-white rounded-xl font-bold shadow-lg shadow-brand-light hover:bg-brand-hover transition-all flex items-center justify-center gap-2"
+                  title={loading ? 'Saving...' : undefined}
+                  className={cn(
+                    "flex-1 py-3 rounded-xl font-bold shadow-lg shadow-brand-light flex items-center justify-center gap-2 transition-all",
+                    loading ? 'bg-brand text-white opacity-60 cursor-not-allowed' : 'bg-brand text-white hover:bg-brand-hover'
+                  )}
                 >
                   {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={18} />}
-                  SAVE
+                  <span className="ml-2">SAVE</span>
                 </button>
               </div>
             </form>
@@ -2177,10 +2328,14 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
                 <button 
                   type="submit"
                   disabled={loading}
-                  className="flex-1 py-3 bg-brand text-white rounded-xl font-bold shadow-lg shadow-brand-light hover:bg-brand-hover transition-all flex items-center justify-center gap-2"
+                  title={loading ? 'Saving product...' : undefined}
+                  className={cn(
+                    "flex-1 py-3 rounded-xl font-bold shadow-lg shadow-brand-light flex items-center justify-center gap-2 transition-all",
+                    loading ? 'bg-brand text-white opacity-60 cursor-not-allowed' : 'bg-brand text-white hover:bg-brand-hover'
+                  )}
                 >
                   {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={18} />}
-                  SAVE PRODUCT
+                  <span className="ml-2">SAVE PRODUCT</span>
                 </button>
               </div>
             </form>
@@ -2284,7 +2439,18 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
               </div>
               <div className="pt-6 flex gap-3 sticky bottom-0 bg-white">
                 <button type="button" onClick={() => { setShowEditModal(false); setEditProduct(null); }} className="flex-1 py-3 bg-white border border-slate-200 text-slate-500 rounded-xl font-bold hover:bg-slate-50 transition-all">CANCEL</button>
-                <button type="submit" disabled={editLoading} className="flex-1 py-3 bg-brand text-white rounded-xl font-bold shadow-lg shadow-brand-light hover:bg-brand-hover transition-all flex items-center justify-center gap-2">{editLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={18} />} SAVE</button>
+                <button
+                  type="submit"
+                  disabled={editLoading}
+                  title={editLoading ? 'Saving...' : undefined}
+                  className={cn(
+                    "flex-1 py-3 rounded-xl font-bold shadow-lg shadow-brand-light flex items-center justify-center gap-2 transition-all",
+                    editLoading ? 'bg-brand text-white opacity-60 cursor-not-allowed' : 'bg-brand text-white hover:bg-brand-hover'
+                  )}
+                >
+                  {editLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={18} />}
+                  <span className="ml-2">SAVE</span>
+                </button>
               </div>
             </form>
           </div>
@@ -2295,7 +2461,7 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
       <div className="fixed -left-[9999px] top-0 pointer-events-none bg-white">
         <div ref={barcodeRef} className="p-2 bg-white text-center inline-block text-black">
           {barcodeToPrint && (() => {
-            const prod = products.find(p => p.ID.toString() === barcodeToPrint);
+            const prod = printProduct ?? products.find(p => p.ID.toString() === barcodeToPrint);
             if (!prod) return null;
             return (
               <>

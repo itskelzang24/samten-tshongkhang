@@ -28,13 +28,15 @@ function doGet(e) {
       case 'getConfig':
         return jsonResponse(getConfig());
       case 'listProducts':
-        return jsonResponse(listProducts(e.parameter.q, e.parameter.limit));
+        return jsonResponse(listProducts(e.parameter.q, e.parameter.limit, e.parameter.start));
       case 'getBill':
         return jsonResponse(getBill(e.parameter.billNo));
       case 'listCategories':
         return jsonResponse(listCategories());
       case 'listBills':
         return jsonResponse(listBills(e.parameter));
+      case 'getProduct':
+        return jsonResponse(getProductById(e.parameter.productId));
       case 'debugBills':
         return jsonResponse(listBillsDebug(e.parameter.limit || 20));
       case 'getDashboardData':
@@ -61,6 +63,8 @@ function doPost(e) {
           return jsonResponse(createBill(body));
         case 'saveBill':
           return jsonResponse(saveBill(body));
+        case 'reopenBill':
+          return jsonResponse(reopenBill(body));
         case 'postPurchase':
           return jsonResponse(postPurchase(body));
         case 'adjustStock':
@@ -73,6 +77,8 @@ function doPost(e) {
           return jsonResponse(updatePermissions(body));
         case 'updateConfig':
           return jsonResponse(updateConfig(body));
+        case 'clearCache':
+          return jsonResponse(clearCaches(body));
         default:
           return jsonResponse({ error: 'Invalid action' }, 400);
       }
@@ -91,6 +97,15 @@ function doPost(e) {
 function jsonResponse(data, status = 200) {
   return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Simple script-wide cache helper using CacheService
+function getScriptCache() {
+  try {
+    return CacheService.getScriptCache();
+  } catch (e) {
+    return null;
+  }
 }
 
 // ------------------------------
@@ -135,6 +150,14 @@ function getSheetValues(sheetName) {
   return values;
 }
 
+function getColumnValues(sheetName, colIndex) {
+  const sheet = getSheet(sheetName);
+  if (!sheet) return [];
+  const lastRow = getLastDataRow(sheet);
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, colIndex, lastRow - 1, 1).getValues().map(r => r[0]);
+}
+
 function getSheetData(sheetName) {
   const values = getSheetValues(sheetName);
   if (!values.length) return [];
@@ -165,35 +188,85 @@ function getTZ() {
 // ------------------------------
 
 function getConfig() {
+  // Cache config in script cache for short periods to reduce sheet reads
+  const cache = getScriptCache();
+  const cacheKey = 'config_cache_v1';
+  if (cache) {
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      try { return JSON.parse(cached); } catch (e) { /* fall through */ }
+    }
+  }
+
   const data = getSheetData(SHEET_NAMES.CONFIG);
   const config = {};
   data.forEach(row => {
     if (row.Key === 'staff_perms') {
-      config[row.Key] = JSON.parse(row.Value);
+      try { config[row.Key] = JSON.parse(row.Value); } catch (e) { config[row.Key] = {}; }
     } else if (['gst_rate', 'bill_no_seed'].includes(row.Key)) {
       config[row.Key] = parseFloat(row.Value);
     } else {
       config[row.Key] = row.Value;
     }
   });
+
+  if (cache) {
+    try { cache.put(cacheKey, JSON.stringify(config), 300); } catch (e) {}
+  }
   return config;
 }
 
-function listProducts(q = '', limit = 100) {
+function listProducts(q = '', limit = 100, start = 0) {
+  // Support pagination and minimal column reads for performance
   limit = parseInt(limit, 10) || 100;
-  const products = getSheetData(SHEET_NAMES.PRODUCTS);
-  let filtered = products;
+  start = parseInt(start, 10) || 0;
+  const lowerQ = q ? String(q).toLowerCase() : null;
 
-  if (q) {
-    const lowerQ = String(q).toLowerCase();
-    filtered = products.filter(p =>
-      String(p.ID).toLowerCase().includes(lowerQ) ||
-      String(p.Name).toLowerCase().includes(lowerQ) ||
-      String(p.Category).toLowerCase().includes(lowerQ)
-    );
+  const sheet = getSheet(SHEET_NAMES.PRODUCTS);
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  // If query provided, read only ID, Name, Category columns for all rows and filter
+  if (lowerQ) {
+    // Columns: ID(1), Name(2), Category(3), Selling(6), Stock(7), MinStock(8), Unit(4), Vendor(9), UpdatedAt(10)
+    const values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+    const results = [];
+    for (let i = 0; i < values.length; i++) {
+      const r = values[i];
+      const id = String(r[0] || '');
+      const name = String(r[1] || '');
+      const cat = String(r[2] || '');
+      if (id.toLowerCase().includes(lowerQ) || name.toLowerCase().includes(lowerQ) || cat.toLowerCase().includes(lowerQ)) {
+        results.push({
+          ID: id,
+          Name: name,
+          Category: cat,
+          Unit: r[3],
+          Cost: r[4],
+          Selling: r[5],
+          Stock: r[6],
+          MinStock: r[7],
+          Vendor: r[8],
+          UpdatedAt: r[9]
+        });
+        if (results.length >= limit) break;
+      }
+    }
+    return results;
   }
 
-  return filtered.slice(0, limit);
+  // No query: use pagination to read only requested range (start is zero-based offset)
+  const readLimit = limit;
+  const available = lastRow - 1;
+  if (start >= available) return [];
+  const readStartRow = 2 + start; // row in sheet to start reading
+  const toRead = Math.min(readLimit, available - start);
+  if (toRead <= 0) return [];
+  const values = sheet.getRange(readStartRow, 1, toRead, 10).getValues();
+  return values.map(r => ({
+    ID: r[0], Name: r[1], Category: r[2], Unit: r[3], Cost: r[4], Selling: r[5], Stock: r[6], MinStock: r[7], Vendor: r[8], UpdatedAt: r[9]
+  }));
 }
 
 function listCategories() {
@@ -226,9 +299,19 @@ function listBills(params) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  // Read columns A:J only
-  const values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
   const tz = getTZ();
+
+  // If no filters provided, read only the most recent `limit` rows (fast path)
+  const noFilters = !params.start && !params.end && !params.billNo;
+  let values = [];
+  if (noFilters) {
+    const readCount = Math.min(Math.max(0, lastRow - 1), limit);
+    const startRow = Math.max(2, lastRow - readCount + 1);
+    values = sheet.getRange(startRow, 1, readCount, 10).getValues();
+  } else {
+    // Read all and filter server-side (filters present)
+    values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  }
 
   let endTs = null;
   if (end) {
@@ -252,7 +335,7 @@ function listBills(params) {
     const ts = isNaN(dt) ? null : dt.getTime();
     const rowDateStr = ts ? Utilities.formatDate(new Date(ts), tz, 'yyyy-MM-dd') : null;
 
-    if (billNo && !String(billNoVal).toLowerCase().includes(billNo)) continue;
+  if (billNo && !String(billNoVal).toLowerCase().includes(billNo)) continue;
     if ((startStr || endStr) && !rowDateStr) continue;
     if (startStr && rowDateStr < startStr) continue;
     if (endStr && rowDateStr > endStr) continue;
@@ -302,6 +385,64 @@ function getBill(billNo) {
   return { ...bill, lines: billLines };
 }
 
+// Fast single-product lookup using ID column index + row read to avoid scanning full sheet
+function getProductById(id) {
+  const sheet = getSheet(SHEET_NAMES.PRODUCTS);
+  if (!sheet) return null;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+
+  // Read ID column only and build a row index map (cached)
+  const cache = getScriptCache();
+  const idxKey = 'product_index_v1';
+  let indexMap = null;
+  if (cache) {
+    try { indexMap = JSON.parse(cache.get(idxKey) || 'null'); } catch (e) { indexMap = null; }
+  }
+
+  if (!indexMap) {
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    indexMap = {};
+    for (let i = 0; i < ids.length; i++) {
+      const val = ids[i][0];
+      if (val !== undefined && val !== null && String(val) !== '') indexMap[String(val)] = i + 2; // sheet row
+    }
+    if (cache) {
+      try { cache.put(idxKey, JSON.stringify(indexMap), 300); } catch (e) {}
+    }
+  }
+
+  const row = indexMap[String(id)];
+  if (!row) return null;
+  const lastCol = getLastDataCol(sheet);
+  const values = sheet.getRange(row, 1, 1, lastCol).getValues()[0];
+  const headers = getHeaders(SHEET_NAMES.PRODUCTS);
+  const obj = {};
+  headers.forEach((h, i) => obj[h] = values[i]);
+  return obj;
+}
+
+// Clear caches: supports body.keys array or clears known keys
+function clearCaches(body) {
+  // Clear in-memory execution caches
+  clearExecutionCache();
+
+  const cache = getScriptCache();
+  if (!cache) return { success: true };
+
+  if (body && Array.isArray(body.keys)) {
+    body.keys.forEach(k => {
+      try { cache.remove(k); } catch (e) {}
+    });
+    return { success: true, removed: body.keys };
+  }
+
+  // Remove common keys
+  const keys = ['config_cache_v1', 'product_index_v1'];
+  keys.forEach(k => { try { cache.remove(k); } catch (e) {} });
+  return { success: true, removed: keys };
+}
+
 function createBill(body) {
   const config = getConfig();
   const billNo = config.bill_prefix + config.bill_no_seed;
@@ -335,7 +476,14 @@ function saveBill(body) {
     }
   }
 
+  // If this is an edit of an existing bill, check whether it's locked.
   if (billRowIndex !== -1) {
+    const existingRow = billsData[billRowIndex - 1] || [];
+    const existingStatus = existingRow[8]; // Status column in sheet
+    if (String(existingStatus).toUpperCase() === 'LOCKED' && !body.force) {
+      return { success: false, error: 'Bill is locked and cannot be edited' };
+    }
+    // Reverse previous lines (stock adjustments) before applying new ones
     reverseBillLines(billNo, user);
   }
 
@@ -374,12 +522,14 @@ function saveBill(body) {
   const grandTotal = subtotal + gstTotal;
 
   if (billRowIndex !== -1) {
+    const newStatus = body.lock ? 'LOCKED' : 'ACTIVE';
     billsSheet.getRange(billRowIndex, 3, 1, 8).setValues([[
-      customerName, method, user, subtotal, gstTotal, grandTotal, 'ACTIVE', now
+      customerName, method, user, subtotal, gstTotal, grandTotal, newStatus, now
     ]]);
   } else {
+    const newStatus = body.lock ? 'LOCKED' : 'ACTIVE';
     billsSheet.appendRow([
-      billNo, now, customerName, method, user, subtotal, gstTotal, grandTotal, 'ACTIVE', now
+      billNo, now, customerName, method, user, subtotal, gstTotal, grandTotal, newStatus, now
     ]);
   }
 
@@ -454,6 +604,7 @@ function updateProductStock(itemId, qtyChange, user, refType, refNo, refLineId, 
 
       clearExecutionCache(SHEET_NAMES.PRODUCTS);
       clearExecutionCache(SHEET_NAMES.LEDGER);
+      try { const cache = getScriptCache(); if (cache) cache.remove('product_index_v1'); } catch (e) {}
       break;
     }
   }
@@ -499,6 +650,8 @@ function saveProduct(body) {
   }
 
   clearExecutionCache(SHEET_NAMES.PRODUCTS);
+  // Invalidate product index cache
+  try { const cache = getScriptCache(); if (cache) cache.remove('product_index_v1'); } catch (e) {}
   return { success: true, id };
 }
 
@@ -528,12 +681,16 @@ function postPurchase(body) {
     clearExecutionCache(SHEET_NAMES.PURCHASES);
   }
 
+  // Product stock changed; invalidate index cache
+  try { const cache = getScriptCache(); if (cache) cache.remove('product_index_v1'); } catch (e) {}
+
   return { success: true };
 }
 
 function adjustStock(body) {
   const { itemId, qtyChange, notes, user } = body;
   updateProductStock(itemId, qtyChange, user, 'ADJUSTMENT', 'ADJ-' + Date.now(), '', 0, 0);
+  try { const cache = getScriptCache(); if (cache) cache.remove('product_index_v1'); } catch (e) {}
   return { success: true };
 }
 
@@ -596,6 +753,7 @@ function updatePermissions(body) {
 
   sheet.appendRow(['staff_perms', JSON.stringify(perms)]);
   clearExecutionCache(SHEET_NAMES.CONFIG);
+  try { const cache = getScriptCache(); if (cache) cache.remove('config_cache_v1'); } catch (e) {}
   return { success: true };
 }
 
@@ -635,6 +793,7 @@ function updateConfig(body) {
   }
 
   clearExecutionCache(SHEET_NAMES.CONFIG);
+  try { const cache = getScriptCache(); if (cache) cache.remove('config_cache_v1'); } catch (e) {}
   return { success: true, updated: keysToUpdate };
 }
 
@@ -673,4 +832,28 @@ function getDashboardData() {
     lowStock,
     chartData
   };
+}
+
+// Reopen (unlock) a bill so it becomes editable again. This only flips the
+// Status column back to ACTIVE and updates the timestamp. Caller should be
+// an admin or a deliberate user action.
+function reopenBill(body) {
+  const billNo = body && body.billNo ? String(body.billNo) : null;
+  if (!billNo) return { success: false, error: 'billNo required' };
+
+  const sheet = getSheet(SHEET_NAMES.SALES_BILLS);
+  if (!sheet) return { success: false, error: 'Sales_Bills sheet not found' };
+  const data = getSheetValues(SHEET_NAMES.SALES_BILLS);
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === billNo) {
+      // Status is column 9, UpdatedAt column 10
+      sheet.getRange(i + 1, 9).setValue('ACTIVE');
+      sheet.getRange(i + 1, 10).setValue(new Date());
+      clearExecutionCache(SHEET_NAMES.SALES_BILLS);
+      return { success: true, billNo };
+    }
+  }
+
+  return { success: false, error: 'Bill not found' };
 }
