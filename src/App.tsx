@@ -1557,12 +1557,10 @@ function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void,
   const searchDebounce = useRef<number | null>(null);
 
   useEffect(() => {
-    // On mount, try today's transactions; if none, fall back to recent bills
+    // On mount, load only today's transactions (no fallback to recent bills).
+    // If there are no transactions today, UI will display the 'No transactions found' message.
     (async () => {
-      const list = await fetchBills({ startDate, endDate });
-      if (!list || list.length === 0) {
-        await fetchBills();
-      }
+      await fetchBills({ startDate, endDate });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1703,7 +1701,7 @@ function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void,
             type="search"
             placeholder="Search by Bill No"
             value={billSearch}
-            onChange={(e) => setBillSearch(e.target.value.trim())}
+            onChange={(e) => setBillSearch(e.target.value.toUpperCase().trim())}
             className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
           />
           {billSearch && (
@@ -1909,6 +1907,7 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
   const [barcodeToPrint, setBarcodeToPrint] = useState<string | null>(null);
   const barcodeRef = useRef<HTMLDivElement>(null);
   const [printProduct, setPrintProduct] = useState<Product | null>(null);
+  const [labelsPerSheet, setLabelsPerSheet] = useState<number>(2); // 1 or 2 labels per physical sheet
 
   // Inventory search state (search by ID or Name)
   const [inventorySearch, setInventorySearch] = useState('');
@@ -2062,7 +2061,33 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">Inventory Management</h2>
           <p className="text-sm text-slate-500 font-medium">{products.length} products in catalog</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">Labels per sheet</span>
+            <div className="inline-flex rounded-lg bg-slate-50 p-1 border border-slate-100">
+              <button
+                onClick={() => setLabelsPerSheet(1)}
+                title="Print 1 label per sheet"
+                className={cn(
+                  "px-3 py-1 text-sm font-bold rounded-md transition-all",
+                  labelsPerSheet === 1 ? 'bg-brand text-white' : 'text-slate-600 hover:bg-white'
+                )}
+              >
+                1
+              </button>
+              <button
+                onClick={() => setLabelsPerSheet(2)}
+                title="Print 2 labels per sheet"
+                className={cn(
+                  "px-3 py-1 text-sm font-bold rounded-md transition-all",
+                  labelsPerSheet === 2 ? 'bg-brand text-white' : 'text-slate-600 hover:bg-white'
+                )}
+              >
+                2
+              </button>
+            </div>
+          </div>
+
           <button 
             onClick={exportToExcel}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all"
@@ -2457,25 +2482,59 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
         </div>
       )}
 
-      {/* BARCODE PRINT LAYOUT */}
+      {/* BARCODE PRINT LAYOUT: renders two labels per physical page (10.5cm x 7cm) */}
       <div className="fixed -left-[9999px] top-0 pointer-events-none bg-white">
-        <div ref={barcodeRef} className="p-2 bg-white text-center inline-block text-black">
+        {/* Inject print-specific page size to help printers honor label dimensions */}
+        <style>{`@page { size: 10.5cm 7cm; margin: 0; }
+          @media print { body { margin: 0; } .barcode-print-sheet { page-break-after: always; } }
+        `}</style>
+
+        <div
+          ref={barcodeRef}
+          className="barcode-print-sheet"
+          style={{
+            width: '10.5cm',
+            height: '7cm',
+            padding: '0.3cm',
+            boxSizing: 'border-box',
+            display: 'flex',
+            gap: '0.4cm',
+            alignItems: 'center',
+            justifyContent: labelsPerSheet === 1 ? 'center' : 'space-between',
+            background: 'white',
+            color: 'black'
+          }}
+        >
           {barcodeToPrint && (() => {
             const prod = printProduct ?? products.find(p => p.ID.toString() === barcodeToPrint);
             if (!prod) return null;
-            return (
-              <>
-                <BarcodeComponent 
-                  value={barcodeToPrint} 
-                  width={1.5}
-                  height={50}
+
+            const Label = () => (
+              <div style={{ flex: labelsPerSheet === 1 ? '0 0 auto' : 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <BarcodeComponent
+                  value={String(barcodeToPrint)}
+                  width={1}
+                  height={60}
                   displayValue={false}
                   margin={0}
                 />
-                <div className="mt-1">
-                  <div className="text-sm font-bold text-slate-900">{prod.Name}</div>
-                  <div className="text-base font-black text-slate-900">Nu. {Number(prod.Selling).toFixed(2)}</div>
+                <div style={{ marginTop: '0.15cm', textAlign: 'center' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: '#0f172a' }}>{prod.Name}</div>
+                  <div style={{ fontSize: '12px', fontWeight: 900, color: '#0f172a' }}>Nu. {Number(prod.Selling).toFixed(2)}</div>
                 </div>
+              </div>
+            );
+
+            if (labelsPerSheet === 1) {
+              return <Label />;
+            }
+
+            // default: two labels per sheet
+            return (
+              <>
+                <Label />
+                <div style={{ width: '0.1cm', background: 'transparent' }} />
+                <Label />
               </>
             );
           })()}
