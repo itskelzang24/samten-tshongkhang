@@ -184,7 +184,14 @@ export class AppErrorBoundary extends (Component as any) {
 }
 
 export default function App() {
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(() => {
+    try {
+      const raw = localStorage.getItem('samten_user');
+      return raw ? JSON.parse(raw) as UserProfile : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'financials' | 'inventory' | 'setup'>('dashboard');
   const [config, setConfig] = useState<Config | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -522,7 +529,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [setCart, setCustomerName, setPaymentMethod, setIsEditing, setMessage, setLoading, returnToTab, setActiveTab]);
+  }, [setCart, setCustomerName, setPaymentMethod, setIsEditing, setMessage, setLoading, returnToTab, setActiveTab, activeTab]);
 
   const filteredSuggestions = useMemo(() => {
     if (!searchQuery) return [];
@@ -536,8 +543,22 @@ export default function App() {
 
   const handleLogout = () => {
     setUser(null);
+    try { localStorage.removeItem('samten_user'); } catch (e) { /* ignore */ }
     setActiveTab('dashboard');
   };
+
+  // keep persisted user in sync with state so refresh retains login
+  useEffect(() => {
+    try {
+      if (user) {
+        localStorage.setItem('samten_user', JSON.stringify(user));
+      } else {
+        localStorage.removeItem('samten_user');
+      }
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [user]);
 
   // Auto-logout when idle for more than 5 minutes (300000 ms)
   useEffect(() => {
@@ -601,51 +622,52 @@ export default function App() {
             </div>
           </div>
 
-          {/* Small-screen nav (kept at top on mobile) */}
-          <nav className="flex h-full md:hidden">
-            {isAllowed('dashboard') && (
-              <TabButton 
-                active={activeTab === 'dashboard'} 
-                onClick={() => setActiveTab('dashboard')} 
-                icon={LayoutDashboard} 
-                label="Dashboard" 
-              />
-            )}
-            {isAllowed('pos') && (
-              <TabButton 
-                active={activeTab === 'pos'} 
-                onClick={() => setActiveTab('pos')} 
-                icon={ShoppingCart} 
-                label="Point of Sale" 
-              />
-            )}
-            {isAllowed('financials') && (
-              <TabButton 
-                active={activeTab === 'financials'} 
-                onClick={() => setActiveTab('financials')} 
-                icon={History} 
-                label="Financials" 
-              />
-            )}
-            {isAllowed('inventory') && (
-              <TabButton 
-                active={activeTab === 'inventory'} 
-                onClick={() => setActiveTab('inventory')} 
-                icon={Package} 
-                label="Inventory" 
-              />
-            )}
-            {user.role === 'ADMIN' && (
-              <TabButton 
-                active={activeTab === 'setup'} 
-                onClick={() => setActiveTab('setup')} 
-                icon={Settings} 
-                label="Setup" 
-              />
-            )}
-          </nav>
+          {/* Small-screen navigation: compact horizontal nav on small devices; full sidebar remains for md+ */}
 
           <div className="flex items-center gap-4">
+            <nav className="flex md:hidden items-center gap-1">
+              {isAllowed('dashboard') && (
+                <button onClick={() => setActiveTab('dashboard')} className={cn(
+                  'p-2 rounded-md transition-colors text-sm font-semibold',
+                  activeTab === 'dashboard' ? 'bg-red-700/80 text-white' : 'text-slate-500 hover:bg-slate-100'
+                )}>
+                  <LayoutDashboard size={18} />
+                </button>
+              )}
+              {isAllowed('pos') && (
+                <button onClick={() => setActiveTab('pos')} className={cn(
+                  'p-2 rounded-md transition-colors text-sm font-semibold',
+                  activeTab === 'pos' ? 'bg-red-700/80 text-white' : 'text-slate-500 hover:bg-slate-100'
+                )}>
+                  <ShoppingCart size={18} />
+                </button>
+              )}
+              {isAllowed('financials') && (
+                <button onClick={() => setActiveTab('financials')} className={cn(
+                  'p-2 rounded-md transition-colors text-sm font-semibold',
+                  activeTab === 'financials' ? 'bg-red-700/80 text-white' : 'text-slate-500 hover:bg-slate-100'
+                )}>
+                  <History size={18} />
+                </button>
+              )}
+              {isAllowed('inventory') && (
+                <button onClick={() => setActiveTab('inventory')} className={cn(
+                  'p-2 rounded-md transition-colors text-sm font-semibold',
+                  activeTab === 'inventory' ? 'bg-red-700/80 text-white' : 'text-slate-500 hover:bg-slate-100'
+                )}>
+                  <Package size={18} />
+                </button>
+              )}
+              {user.role === 'ADMIN' && (
+                <button onClick={() => setActiveTab('setup')} className={cn(
+                  'p-2 rounded-md transition-colors text-sm font-semibold',
+                  activeTab === 'setup' ? 'bg-red-700/80 text-white' : 'text-slate-500 hover:bg-slate-100'
+                )}>
+                  <Settings size={18} />
+                </button>
+              )}
+            </nav>
+
             <div className="hidden md:flex flex-col items-end">
               <span className="text-sm font-semibold text-slate-700">{user.username}</span>
               <span className="text-[10px] text-brand font-bold uppercase">{user.role}</span>
@@ -662,7 +684,7 @@ export default function App() {
       </header>
 
       <div className="flex">
-        <aside className="hidden md:flex flex-col w-64 h-[calc(100vh-64px)] sticky top-16 bg-slate-900 text-white shadow-lg">
+  <aside className="hidden md:flex flex-col w-64 h-[calc(100vh-64px)] sticky top-16 bg-slate-900 text-white shadow-lg">
           <nav className="mt-4 flex-1 px-2 space-y-1">
             {isAllowed('dashboard') && (
               <button onClick={() => setActiveTab('dashboard')} className={cn(
@@ -761,6 +783,7 @@ export default function App() {
                   </div>
                   <input
                     ref={barcodeInputRef}
+                    name="productSearch"
                     type="text"
                     placeholder="Scan barcode or search products (ID, Name, Category)..."
                     className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl shadow-sm focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-lg"
@@ -782,41 +805,64 @@ export default function App() {
                 </form>
 
                 {/* SUGGESTIONS DROPDOWN */}
-                {showSuggestions && filteredSuggestions.length > 0 && (
+                {showSuggestions && (
                   <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="p-2 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider px-2">Products Found</span>
+                      <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider px-2">Products</span>
                       <span className="text-[10px] text-slate-400 px-2">{filteredSuggestions.length} results</span>
                     </div>
                     <div className="max-h-[400px] overflow-y-auto">
-                      {(filteredSuggestions || []).map((p) => (
-                        <button
-                          key={p.ID}
-                          onClick={() => addToCart(p)}
-                          disabled={loading}
-                          title={loading ? 'Update in progress' : undefined}
-                          className={cn(
-                            "w-full flex items-center justify-between p-4 transition-colors border-b border-slate-50 last:border-0 group",
-                            loading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-brand-light'
-                          )}
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-hover:bg-brand-light group-hover:text-brand transition-colors">
-                              <Package size={20} />
+                      {filteredSuggestions.length > 0 ? (
+                        (filteredSuggestions || []).map((p) => (
+                          <button
+                            key={p.ID}
+                            onClick={() => addToCart(p)}
+                            disabled={loading}
+                            title={loading ? 'Update in progress' : undefined}
+                            className={cn(
+                              "w-full flex items-center justify-between p-4 transition-colors border-b border-slate-50 last:border-0 group",
+                              loading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-brand-light'
+                            )}
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-hover:bg-brand-light group-hover:text-brand transition-colors">
+                                <Package size={20} />
+                              </div>
+                              <div className="text-left">
+                                <p className="font-semibold text-slate-800">{p.Name}</p>
+                                <p className="text-xs text-slate-500">{p.Category} • {p.Unit}</p>
+                              </div>
                             </div>
-                            <div className="text-left">
-                              <p className="font-semibold text-slate-800">{p.Name}</p>
-                              <p className="text-xs text-slate-500">{p.Category} • {p.Unit}</p>
+                            <div className="text-right">
+                              <p className="font-bold text-brand">Nu. {p.Selling.toFixed(2)}</p>
+                              <p className={cn("text-[10px] font-bold uppercase", p.Stock <= p.MinStock ? "text-red-500" : "text-slate-400")}>
+                                Stock: {p.Stock}
+                              </p>
                             </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-brand">Nu. {p.Selling.toFixed(2)}</p>
-                            <p className={cn("text-[10px] font-bold uppercase", p.Stock <= p.MinStock ? "text-red-500" : "text-slate-400")}>
-                              Stock: {p.Stock}
-                            </p>
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        ))
+                      ) : (products.length === 0) ? (
+                        // Show skeleton suggestions while products are loading
+                        <div className="p-2 space-y-2">
+                          {Array.from({ length: 4 }).map((_, i) => (
+                            <div key={`suggest-skel-${i}`} className="flex items-center justify-between gap-4 p-3 border-b border-slate-50 last:border-0 animate-pulse">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-slate-200 rounded-lg" />
+                                <div className="space-y-1">
+                                  <div className="h-3 bg-slate-200 rounded w-40" />
+                                  <div className="h-2 bg-slate-200 rounded w-24" />
+                                </div>
+                              </div>
+                              <div className="space-y-1 text-right">
+                                <div className="h-3 bg-slate-200 rounded w-16 ml-auto" />
+                                <div className="h-2 bg-slate-200 rounded w-12 ml-auto" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-sm text-slate-500">No products found</div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -911,6 +957,7 @@ export default function App() {
                                 <span className="text-slate-400">Nu.</span>
                                 <input
                                   type="number"
+                                  name={`rate-${item.ID}-${item.lineType}`}
                                   className={cn(
                                     "w-20 text-right font-bold text-slate-700 bg-transparent border-b border-transparent focus:border-brand outline-none transition-all p-1",
                                     loading ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-200'
@@ -1280,6 +1327,7 @@ function LoginScreen({ onLogin, fetchConfig }: { onLogin: (user: UserProfile) =>
               </div>
               <input 
                 required
+                name="username"
                 type="text" 
                 className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all font-medium"
                 placeholder="Enter username"
@@ -1297,6 +1345,7 @@ function LoginScreen({ onLogin, fetchConfig }: { onLogin: (user: UserProfile) =>
               </div>
               <input 
                 required
+                name="password"
                 type={showPassword ? 'text' : 'password'}
                 className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all font-medium"
                 placeholder="Enter password"
@@ -1445,6 +1494,7 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">GST Rate (%)</label>
               <input 
+                name="gstPercent"
                 type="number" 
                 min={0}
                 max={100}
@@ -1457,6 +1507,7 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Bill Prefix</label>
               <input 
+                name="billPrefix"
                 type="text" 
                 className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700"
                 value={billPrefix}
@@ -1514,12 +1565,45 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
 function DashboardTab({ data, onRefresh, onGoToInventory }: { data: any, onRefresh: () => void, onGoToInventory: () => void }) {
   const COLORS = ['#f24153', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
   const [isReady, setIsReady] = useState(false);
+  const chartRef = useRef<HTMLDivElement | null>(null);
+  const [chartCanRender, setChartCanRender] = useState(false);
 
   useEffect(() => {
     // Delay rendering chart to ensure container dimensions are settled
     const timer = setTimeout(() => setIsReady(true), 300);
     return () => clearTimeout(timer);
   }, []);
+
+  // Ensure the chart container has non-zero dimensions before rendering the chart.
+  useEffect(() => {
+    if (!isReady) return;
+    let mounted = true;
+
+    const measure = () => {
+      const el = chartRef.current;
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+
+    const tryMeasure = () => {
+      let attempts = 0;
+      const attempt = () => {
+        attempts += 1;
+        if (!mounted) return;
+        if (measure()) {
+          setChartCanRender(true);
+          return;
+        }
+        if (attempts < 6) requestAnimationFrame(attempt);
+        else setChartCanRender(true); // fallback
+      };
+      requestAnimationFrame(attempt);
+    };
+
+    const t = window.setTimeout(tryMeasure, 40);
+    return () => { mounted = false; clearTimeout(t); };
+  }, [isReady]);
 
   // Defensive checks
   const chartData = Array.isArray(data?.chartData) ? data.chartData : [];
@@ -1550,9 +1634,9 @@ function DashboardTab({ data, onRefresh, onGoToInventory }: { data: any, onRefre
             </h3>
             <span className="text-[10px] font-bold uppercase text-slate-400 bg-slate-50 px-2 py-1 rounded">All Time</span>
           </div>
-          <div className={`${chartData.length <= 1 ? 'h-[200px]' : 'h-[300px]'} w-full transition-all duration-500 overflow-hidden min-h-0 min-w-0`}>
-            {isReady && chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+          <div ref={chartRef} className={`${chartData.length <= 1 ? 'h-[200px]' : 'h-[300px]'} w-full transition-all duration-500 overflow-hidden min-h-0 min-w-0`} style={{ minWidth: 0, minHeight: 0 }}>
+            {chartCanRender && chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%" debounce={50}>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis 
@@ -1646,18 +1730,23 @@ function DashboardTab({ data, onRefresh, onGoToInventory }: { data: any, onRefre
 function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void, onNotify: (m: { type: 'success' | 'error', text: string } | null) => void }) {
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [selectedLoading, setSelectedLoading] = useState(false);
   const [startDate, setStartDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [billSearch, setBillSearch] = useState('');
+  const [hasMore, setHasMore] = useState(false);
+  const [startIndex, setStartIndex] = useState(0);
   const searchDebounce = useRef<number | null>(null);
+  const fetchController = useRef<AbortController | null>(null);
+  const PAGE_SIZE = 50; // smaller page for snappier initial load
 
   useEffect(() => {
-    // On mount, load only today's transactions (no fallback to recent bills).
-    // If there are no transactions today, UI will display the 'No transactions found' message.
+    // On mount, load the first page for today's transactions.
     (async () => {
-      await fetchBills({ startDate, endDate });
+      setStartIndex(0);
+      await fetchBills({ startDate, endDate, start: 0 });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1676,38 +1765,58 @@ function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate]);
 
-  const fetchBills = async (opts?: { startDate?: string; endDate?: string; billNo?: string }) => {
-    setLoading(true);
+  const fetchBills = async (opts?: { startDate?: string; endDate?: string; billNo?: string; start?: number }) => {
+    const start = opts?.start || 0;
+    if (start === 0) setLoading(true);
+    else setLoadingMore(true);
+
+    // cancel previous ongoing request
+    if (fetchController.current) {
+      try { fetchController.current.abort(); } catch (e) { /* ignore */ }
+    }
+    fetchController.current = new AbortController();
+
     try {
-      const params: Record<string, string> = { action: 'listBills', limit: '200' };
+      const params: Record<string, string> = { action: 'listBills', limit: String(PAGE_SIZE), start: String(start) };
       if (opts?.billNo) {
         params.billNo = opts.billNo;
       } else {
-        // if no billNo search provided, use date range if available
         if (opts?.startDate) params.start = opts.startDate;
         if (opts?.endDate) params.end = opts.endDate;
       }
       const qs = new URLSearchParams(params).toString();
-      const res = await fetch(`${WEB_APP_URL}?${qs}`);
+      const res = await fetch(`${WEB_APP_URL}?${qs}`, { signal: fetchController.current.signal });
       if (!res.ok) throw new Error('Failed to fetch bills');
       const data = await res.json();
-      let list = Array.isArray(data) ? data : [];
-      // Normalize each bill: ensure DateTime is an ISO string and GrandTotal is a number
-      list = list.map((b: any) => ({
+      const list = Array.isArray(data) ? data : [];
+
+      // Minimal normalization: cast numeric fields only.
+      const normalized = list.map((b: any) => ({
         ...b,
-        DateTime: b.DateTime ? (typeof b.DateTime === 'string' ? b.DateTime : new Date(b.DateTime).toISOString()) : null,
         GrandTotal: (b.GrandTotal !== undefined && b.GrandTotal !== null) ? Number(b.GrandTotal) : 0,
         Subtotal: (b.Subtotal !== undefined && b.Subtotal !== null) ? Number(b.Subtotal) : 0,
         GSTTotal: (b.GSTTotal !== undefined && b.GSTTotal !== null) ? Number(b.GSTTotal) : 0,
       }));
-      setBills(list);
-      return list;
-    } catch (err) {
+
+      if (start && start > 0) {
+        setBills(prev => [...prev, ...normalized]);
+      } else {
+        setBills(normalized);
+      }
+
+      setHasMore(normalized.length === PAGE_SIZE);
+      setStartIndex(start + normalized.length);
+      return normalized;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        return [];
+      }
       console.error(err);
-      setBills([]);
+      if (start === 0) setBills([]);
       return [];
     } finally {
-      setLoading(false);
+      if (start === 0) setLoading(false);
+      else setLoadingMore(false);
     }
   };
 
@@ -1736,11 +1845,13 @@ function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void,
     // If search string is empty, show date range results
     if (!billSearch) {
       // small delay to avoid double-calls
-      searchDebounce.current = window.setTimeout(() => fetchBills({ startDate, endDate }), 250);
+      searchDebounce.current = window.setTimeout(() => { setStartIndex(0); fetchBills({ startDate, endDate, start: 0 }); }, 250);
       return;
     }
     searchDebounce.current = window.setTimeout(() => {
-      fetchBills({ billNo: billSearch });
+      // when searching by bill number, reset to first page
+      setStartIndex(0);
+      fetchBills({ billNo: billSearch, start: 0 });
     }, 250);
     return () => { if (searchDebounce.current) window.clearTimeout(searchDebounce.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1787,14 +1898,15 @@ function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void,
       <div className="mt-4 mb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div className="flex items-center gap-2">
           <label className="text-xs text-slate-500 mr-2">Start</label>
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+          <input name="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
           <label className="text-xs text-slate-500 ml-3 mr-2">End</label>
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+          <input name="endDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
           <button onClick={() => fetchBills({ startDate, endDate })} className="ml-3 px-3 py-2 bg-brand text-white rounded-lg text-sm font-bold">Fetch</button>
         </div>
 
         <div className="flex items-center gap-2">
           <input
+            name="billSearch"
             type="search"
             placeholder="Search by Bill No"
             value={billSearch}
@@ -1823,7 +1935,31 @@ function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void,
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {loading ? (
-                  <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">Loading history...</td></tr>
+                  // Skeleton rows give a smoother loading experience
+                  <>
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={`skeleton-${i}`} className="animate-pulse">
+                        <td className="px-6 py-4">
+                          <div className="h-4 bg-slate-200 rounded w-24" />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="h-4 bg-slate-200 rounded w-20" />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="h-4 bg-slate-200 rounded w-40" />
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="h-4 bg-slate-200 rounded w-16 ml-auto" />
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="h-4 bg-slate-200 rounded w-12 mx-auto" />
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="h-4 bg-slate-200 rounded w-6 ml-auto" />
+                        </td>
+                      </tr>
+                    ))}
+                  </>
                 ) : (bills && bills.length > 0) ? (bills || []).map((bill, idx) => (
                   <tr 
                     key={`${getBillNo(bill)}-${idx}`} 
@@ -1860,6 +1996,19 @@ function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void,
                   </tr>
                 )) : (
                   <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">No transactions found for the selected range.</td></tr>
+                )}
+                {hasMore && (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => fetchBills({ startDate, endDate, start: startIndex })}
+                        disabled={loadingMore}
+                        className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold hover:bg-slate-50"
+                      >
+                        {loadingMore ? 'Loading...' : 'Load more'}
+                      </button>
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
@@ -2213,6 +2362,7 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
         <div className="p-4 border-b border-slate-100 flex items-center gap-3">
           <Search size={16} />
           <input
+            name="inventorySearch"
             value={inventorySearch}
             onChange={(e) => setInventorySearch(e.target.value)}
             placeholder="Search inventory by ID or name..."
@@ -2238,72 +2388,106 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {(filteredProducts || []).map((p) => (
-                <tr key={p.ID} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1">
-                      <div className="bg-white p-1 border border-slate-100 rounded shadow-sm inline-block w-fit">
-                        <BarcodeComponent 
-                          value={p.ID.toString()} 
-                          width={0.8}
-                          height={20}
-                          displayValue={false}
-                          margin={0}
-                        />
+              {products.length === 0 ? (
+                // Inventory skeleton rows while product list is empty/loading
+                <>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={`inv-skel-${i}`} className="animate-pulse">
+                      <td className="px-6 py-4">
+                        <div className="h-4 bg-slate-200 rounded w-24" />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="h-4 bg-slate-200 rounded w-40" />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="h-4 bg-slate-200 rounded w-20" />
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="h-4 bg-slate-200 rounded w-16 ml-auto" />
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="h-4 bg-slate-200 rounded w-16 ml-auto" />
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="h-4 bg-slate-200 rounded w-12 mx-auto" />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="h-4 bg-slate-200 rounded w-20" />
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="h-4 bg-slate-200 rounded w-12 ml-auto" />
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              ) : (
+                (filteredProducts || []).map((p) => (
+                  <tr key={p.ID} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <div className="bg-white p-1 border border-slate-100 rounded shadow-sm inline-block w-fit">
+                          <BarcodeComponent 
+                            value={p.ID.toString()} 
+                            width={0.8}
+                            height={20}
+                            displayValue={false}
+                            margin={0}
+                          />
+                        </div>
+                        <span className="font-mono text-[10px] text-slate-500 font-bold">{p.ID}</span>
                       </div>
-                      <span className="font-mono text-[10px] text-slate-500 font-bold">{p.ID}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="font-bold text-slate-800">{p.Name}</p>
-                    <p className="text-[10px] text-slate-400 font-medium">{p.Unit}</p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-md uppercase">
-                      {p.Category}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right text-slate-500 font-medium">Nu. {p.Cost.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-right font-bold text-brand">Nu. {p.Selling.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={cn(
-                      "font-black text-lg",
-                      p.Stock <= p.MinStock ? "text-brand" : "text-slate-800"
-                    )}>
-                      {p.Stock}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    {p.Stock <= p.MinStock ? (
-                      <div className="flex items-center gap-1.5 text-brand font-bold text-[10px] uppercase">
-                        <AlertTriangle size={14} />
-                        Low Stock
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5 text-brand font-bold text-[10px] uppercase">
-                        <CheckCircle2 size={14} />
-                        Healthy
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => printBarcode(p.ID.toString())}
-                      className="p-2 text-slate-400 hover:text-brand rounded-lg transition-all"
-                      title="Print Barcode"
-                    >
-                      <Barcode size={18} />
-                    </button>
-                    <button 
-                      onClick={() => { setEditProduct(p); setShowEditModal(true); }}
-                      className="p-2 ml-2 text-slate-400 hover:text-brand rounded-lg transition-all"
-                      title="Edit / Restock"
-                    >
-                      <Edit size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="font-bold text-slate-800">{p.Name}</p>
+                      <p className="text-[10px] text-slate-400 font-medium">{p.Unit}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-md uppercase">
+                        {p.Category}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right text-slate-500 font-medium">Nu. {p.Cost.toFixed(2)}</td>
+                    <td className="px-6 py-4 text-right font-bold text-brand">Nu. {p.Selling.toFixed(2)}</td>
+                    <td className="px-6 py-4 text-center">
+                      <span className={cn(
+                        "font-black text-lg",
+                        p.Stock <= p.MinStock ? "text-brand" : "text-slate-800"
+                      )}>
+                        {p.Stock}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {p.Stock <= p.MinStock ? (
+                        <div className="flex items-center gap-1.5 text-brand font-bold text-[10px] uppercase">
+                          <AlertTriangle size={14} />
+                          Low Stock
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-brand font-bold text-[10px] uppercase">
+                          <CheckCircle2 size={14} />
+                          Healthy
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button 
+                        onClick={() => printBarcode(p.ID.toString())}
+                        className="p-2 text-slate-400 hover:text-brand rounded-lg transition-all"
+                        title="Print Barcode"
+                      >
+                        <Barcode size={18} />
+                      </button>
+                      <button 
+                        onClick={() => { setEditProduct(p); setShowEditModal(true); }}
+                        className="p-2 ml-2 text-slate-400 hover:text-brand rounded-lg transition-all"
+                        title="Edit / Restock"
+                      >
+                        <Edit size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
