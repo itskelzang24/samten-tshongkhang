@@ -290,6 +290,10 @@ function listCategories() {
 function listBills(params) {
   params = params || {};
   const limit = params.limit ? parseInt(params.limit, 10) : 100;
+  // 'offset' is used for pagination (number of items to skip). Backwards
+  // compatibility: if callers provided a numeric 'start' we don't treat it as
+  // an offset when it's a date string. Prefer explicit 'offset' param.
+  const offset = params.offset ? parseInt(params.offset, 10) : 0;
   const start = params.start ? new Date(params.start) : null;
   const end = params.end ? new Date(params.end) : null;
   const billNo = params.billNo ? String(params.billNo).toLowerCase() : null;
@@ -301,13 +305,16 @@ function listBills(params) {
 
   const tz = getTZ();
 
-  // If no filters provided, read only the most recent `limit` rows (fast path)
+  // If no filters provided, read only the most recent rows. If an offset is
+  // requested, read enough rows to satisfy offset+limit; otherwise read up
+  // to `limit` rows. When filters are present we must read all rows to
+  // filter server-side.
   const noFilters = !params.start && !params.end && !params.billNo;
   let values = [];
   if (noFilters) {
-    const readCount = Math.min(Math.max(0, lastRow - 1), limit);
-    const startRow = Math.max(2, lastRow - readCount + 1);
-    values = sheet.getRange(startRow, 1, readCount, 10).getValues();
+    const needed = offset ? Math.min(Math.max(0, lastRow - 1), offset + limit) : Math.min(Math.max(0, lastRow - 1), limit);
+    const startRow = Math.max(2, lastRow - needed + 1);
+    values = sheet.getRange(startRow, 1, needed, 10).getValues();
   } else {
     // Read all and filter server-side (filters present)
     values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
@@ -355,8 +362,12 @@ function listBills(params) {
   }
 
   results.sort((a, b) => new Date(b.DateTime) - new Date(a.DateTime));
-  if (results.length > limit) results.length = limit;
-  return results;
+
+  // Apply pagination offset and limit. If offset is 0 this behaves like the
+  // previous implementation (return up to `limit` most recent rows).
+  const startIndex = Math.max(0, offset || 0);
+  const endIndex = Math.min(results.length, startIndex + limit);
+  return results.slice(startIndex, endIndex);
 }
 
 function listBillsDebug(limit = 20) {

@@ -195,6 +195,48 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'financials' | 'inventory' | 'setup'>('dashboard');
   const [config, setConfig] = useState<Config | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [prefetchedBills, setPrefetchedBills] = useState<Bill[] | null>(null);
+
+  const prefetchFinancials = useCallback(async (limit = 50, extraPages = 0) => {
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      // First page (offset 0)
+      const params0 = new URLSearchParams({ action: 'listBills', start: today, end: today, limit: String(limit) }).toString();
+      const res0 = await fetch(`${WEB_APP_URL}?${params0}`);
+      if (!res0.ok) return;
+      const data0 = await res0.json();
+      if (!Array.isArray(data0)) return;
+      let combined: Bill[] = data0 as Bill[];
+
+      // Background fetch next `extraPages` pages (offset by limit each)
+      for (let p = 1; p <= extraPages; p++) {
+        try {
+          const offset = p * limit;
+          const paramsP = new URLSearchParams({ action: 'listBills', start: today, end: today, limit: String(limit), offset: String(offset) }).toString();
+          const resP = await fetch(`${WEB_APP_URL}?${paramsP}`);
+          if (!resP.ok) continue;
+          const dataP = await resP.json();
+          if (Array.isArray(dataP) && dataP.length > 0) {
+            // append while avoiding duplicates (based on BillNo)
+            const existing = new Set(combined.map(x => String(x.BillNo)));
+            for (const row of dataP) {
+              if (!existing.has(String(row.BillNo))) {
+                combined.push(row as Bill);
+                existing.add(String(row.BillNo));
+              }
+            }
+          }
+        } catch (err) {
+          console.debug('prefetch extra page failed', err);
+        }
+      }
+
+      setPrefetchedBills(combined);
+    } catch (err) {
+      // ignore prefetch errors
+      console.debug('prefetchFinancials failed', err);
+    }
+  }, []);
   const [products, setProducts] = useState<Product[]>([]);
   const [dashboardData, setDashboardData] = useState<{ lowStock: Product[], chartData: any[] }>({ lowStock: [], chartData: [] });
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -309,6 +351,24 @@ export default function App() {
     init();
     return () => { mounted = false; };
   }, [fetchConfig, fetchProducts, fetchDashboardData]);
+
+  // App-level prefetch for Financials: start loading today's transactions
+  // as soon as the user is available so the Financials tab feels instant.
+  // Keep older prefetch triggered on login as a background refresh - it will
+  // be a no-op if LoginScreen already prefetched. Use the smaller limit here
+  // so we don't add extra load on network when user is present.
+  useEffect(() => {
+    if (!user) return;
+    let mounted = true;
+    (async () => {
+      try {
+        await prefetchFinancials(20);
+      } catch (err) {
+        console.debug('Financials background prefetch failed', err);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [user, prefetchFinancials]);
 
   const addToCart = useCallback((product: Product) => {
     if (loading) return; // prevent adding while save/update in progress
@@ -603,7 +663,7 @@ export default function App() {
   }
 
   if (!user) {
-    return <LoginScreen onLogin={setUser} fetchConfig={fetchConfig} />;
+    return <LoginScreen onLogin={setUser} fetchConfig={fetchConfig} prefetchFinancials={prefetchFinancials} />;
   }
 
   const isAllowed = (tab: string) => {
@@ -1131,7 +1191,7 @@ export default function App() {
         )}
 
         {activeTab === 'financials' && (
-          <FinancialsTab onEdit={editExistingBill} onNotify={setMessage} />
+          <FinancialsTab onEdit={editExistingBill} onNotify={setMessage} prefetchedBills={prefetchedBills} />
         )}
 
         {activeTab === 'inventory' && isAllowed('inventory') && (
@@ -1268,12 +1328,22 @@ export default function App() {
 /**
  * LOGIN SCREEN
  */
-function LoginScreen({ onLogin, fetchConfig }: { onLogin: (user: UserProfile) => void, fetchConfig: () => void }) {
+function LoginScreen({ onLogin, fetchConfig, prefetchFinancials }: { onLogin: (user: UserProfile) => void, fetchConfig: () => void, prefetchFinancials?: (limit?: number, extraPages?: number) => Promise<void> }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    // Prefetch Financials while the login screen is visible to improve
+    // perceived performance when the user opens Financials after login.
+    try {
+      if (prefetchFinancials) prefetchFinancials(50, 2);
+    } catch (err) {
+      // ignore
+    }
+  }, [prefetchFinancials]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1727,9 +1797,14 @@ function DashboardTab({ data, onRefresh, onGoToInventory }: { data: any, onRefre
 /**
  * FINANCIALS TAB
  */
-function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void, onNotify: (m: { type: 'success' | 'error', text: string } | null) => void }) {
+function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo: string) => void, onNotify: (m: { type: 'success' | 'error', text: string } | null) => void, prefetchedBills?: Bill[] | null }) {
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
+  // initialLoading is true only for the very first page load to distinguish
+  // an empty-result state from "we're still fetching". This prevents the
+  // incorrect "No transactions found" message showing while the first
+  // network request is in-flight.
+  const [initialLoading, setInitialLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [selectedLoading, setSelectedLoading] = useState(false);
@@ -1740,13 +1815,32 @@ function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void,
   const [startIndex, setStartIndex] = useState(0);
   const searchDebounce = useRef<number | null>(null);
   const fetchController = useRef<AbortController | null>(null);
-  const PAGE_SIZE = 50; // smaller page for snappier initial load
+  const PAGE_SIZE = 50; // regular page size for subsequent loads
+  const INITIAL_PAGE_SIZE = 20; // smaller first page for faster first paint
 
   useEffect(() => {
-    // On mount, load the first page for today's transactions.
+    // On mount, prefer prefetched bills for instant UX. If we have
+    // prefetched data (loaded at App-level), use it immediately and then
+    // refresh in the background. Otherwise, perform the smaller initial
+    // fetch as before.
     (async () => {
       setStartIndex(0);
-      await fetchBills({ startDate, endDate, start: 0 });
+      if (prefetchedBills && prefetchedBills.length > 0) {
+        const normalized = (prefetchedBills as any[]).map((b: any) => ({
+          ...b,
+          GrandTotal: (b.GrandTotal !== undefined && b.GrandTotal !== null) ? Number(b.GrandTotal) : 0,
+          Subtotal: (b.Subtotal !== undefined && b.Subtotal !== null) ? Number(b.Subtotal) : 0,
+          GSTTotal: (b.GSTTotal !== undefined && b.GSTTotal !== null) ? Number(b.GSTTotal) : 0,
+        }));
+        setBills(normalized as Bill[]);
+        setInitialLoading(false);
+        // Background refresh to ensure freshest data
+        await fetchBills({ startDate, endDate, start: 0 });
+      } else {
+        setInitialLoading(true);
+        await fetchBills({ startDate, endDate, start: 0, limit: INITIAL_PAGE_SIZE, initial: true });
+        setInitialLoading(false);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1765,8 +1859,12 @@ function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate]);
 
-  const fetchBills = async (opts?: { startDate?: string; endDate?: string; billNo?: string; start?: number }) => {
+  const fetchBills = async (opts?: { startDate?: string; endDate?: string; billNo?: string; start?: number; limit?: number; initial?: boolean }) => {
     const start = opts?.start || 0;
+    const limit = opts?.limit || PAGE_SIZE;
+    // if this is the initial fetch, keep initialLoading true (it is set by
+    // the caller). We still set `loading` so existing logic (e.g., skeleton)
+    // behaves as before.
     if (start === 0) setLoading(true);
     else setLoadingMore(true);
 
@@ -1777,7 +1875,11 @@ function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void,
     fetchController.current = new AbortController();
 
     try {
-      const params: Record<string, string> = { action: 'listBills', limit: String(PAGE_SIZE), start: String(start) };
+      const params: Record<string, string> = { action: 'listBills', limit: String(limit) };
+      // When fetching pages by offset, pass `offset`. If date filters exist,
+      // include `start` and `end` as date-range filters. Prefers explicit
+      // offset for pagination.
+      if (start && start > 0) params.offset = String(start);
       if (opts?.billNo) {
         params.billNo = opts.billNo;
       } else {
@@ -1804,8 +1906,8 @@ function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void,
         setBills(normalized);
       }
 
-      setHasMore(normalized.length === PAGE_SIZE);
-      setStartIndex(start + normalized.length);
+  setHasMore(normalized.length === limit);
+  setStartIndex(start + normalized.length);
       return normalized;
     } catch (err: any) {
       if (err.name === 'AbortError') {
@@ -1934,7 +2036,7 @@ function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void,
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {loading ? (
+                {(loading || initialLoading) ? (
                   // Skeleton rows give a smoother loading experience
                   <>
                     {Array.from({ length: 6 }).map((_, i) => (
@@ -1995,7 +2097,9 @@ function FinancialsTab({ onEdit, onNotify }: { onEdit: (billNo: string) => void,
                     </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">No transactions found for the selected range.</td></tr>
+                  (!loading && !initialLoading) ? (
+                    <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400">No transactions found for the selected range.</td></tr>
+                  ) : null
                 )}
                 {hasMore && (
                   <tr>
