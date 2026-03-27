@@ -568,7 +568,8 @@ export default function App() {
             </div>
           </div>
 
-          <nav className="flex h-full">
+          {/* Small-screen nav (kept at top on mobile) */}
+          <nav className="flex h-full md:hidden">
             {isAllowed('dashboard') && (
               <TabButton 
                 active={activeTab === 'dashboard'} 
@@ -627,7 +628,68 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-4 md:p-6">
+      <div className="flex">
+        <aside className="hidden md:flex flex-col w-64 h-[calc(100vh-64px)] sticky top-16 bg-slate-900 text-white shadow-lg">
+          <nav className="mt-4 flex-1 px-2 space-y-1">
+            {isAllowed('dashboard') && (
+              <button onClick={() => setActiveTab('dashboard')} className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-semibold',
+                activeTab === 'dashboard' ? 'bg-red-700/80 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+              )}>
+                <LayoutDashboard size={18} />
+                <span>Dashboard</span>
+              </button>
+            )}
+            {isAllowed('pos') && (
+              <button onClick={() => setActiveTab('pos')} className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-semibold',
+                activeTab === 'pos' ? 'bg-red-700/80 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+              )}>
+                <ShoppingCart size={18} />
+                <span>Point of Sale</span>
+              </button>
+            )}
+            {isAllowed('financials') && (
+              <button onClick={() => setActiveTab('financials')} className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-semibold',
+                activeTab === 'financials' ? 'bg-red-700/80 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+              )}>
+                <History size={18} />
+                <span>Financials</span>
+              </button>
+            )}
+            {isAllowed('inventory') && (
+              <button onClick={() => setActiveTab('inventory')} className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-semibold',
+                activeTab === 'inventory' ? 'bg-red-700/80 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+              )}>
+                <Package size={18} />
+                <span>Inventory</span>
+              </button>
+            )}
+            {user.role === 'ADMIN' && (
+              <button onClick={() => setActiveTab('setup')} className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-semibold',
+                activeTab === 'setup' ? 'bg-red-700/80 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+              )}>
+                <Settings size={18} />
+                <span>Setup</span>
+              </button>
+            )}
+          </nav>
+          <div className="px-4 py-4 border-t border-slate-800 text-[12px] text-slate-400">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center text-red-300">{user.username?.charAt(0)}</div>
+              <div>
+                <div className="text-sm font-semibold text-white">{user.username}</div>
+                <div className="text-[11px] text-slate-400">{user.role}</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <main className="flex-1">
+          <div className="max-w-7xl mx-auto p-4 md:p-6">
         {activeTab === 'dashboard' && isAllowed('dashboard') && (
           <DashboardTab 
             data={dashboardData} 
@@ -999,7 +1061,9 @@ export default function App() {
         {activeTab === 'setup' && user.role === 'ADMIN' && (
           <SetupTab config={config} onRefresh={fetchConfig} />
         )}
-      </main>
+          </div>
+        </main>
+      </div>
 
       {/* RECEIPT MODAL */}
       {showReceipt && lastBill && (
