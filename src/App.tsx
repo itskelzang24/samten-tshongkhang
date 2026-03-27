@@ -539,6 +539,39 @@ export default function App() {
     setActiveTab('dashboard');
   };
 
+  // Auto-logout when idle for more than 5 minutes (300000 ms)
+  useEffect(() => {
+    if (!user) return;
+
+    let idleTimeout: number | undefined;
+    const LOGOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+    const doLogout = () => {
+      try {
+        setMessage({ type: 'error', text: 'Logged out due to inactivity' });
+      } catch (e) {
+        // ignore
+      }
+      handleLogout();
+    };
+
+    const resetTimer = () => {
+      if (idleTimeout) window.clearTimeout(idleTimeout);
+      idleTimeout = window.setTimeout(doLogout, LOGOUT_MS) as unknown as number;
+    };
+
+    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'click'];
+    events.forEach(ev => window.addEventListener(ev, resetTimer));
+
+    // start the timer
+    resetTimer();
+
+    return () => {
+      if (idleTimeout) window.clearTimeout(idleTimeout);
+      events.forEach(ev => window.removeEventListener(ev, resetTimer));
+    };
+  }, [user, handleLogout]);
+
   if (initialLoading && user) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
