@@ -33,16 +33,17 @@ import {
   Users as UsersIcon
 } from 'lucide-react';
 import { 
-  BarChart, 
-  Bar, 
   XAxis, 
   YAxis, 
   CartesianGrid, 
   Tooltip, 
   ResponsiveContainer, 
-  Cell,
   PieChart,
-  Pie
+  Pie,
+  LineChart,
+  Line,
+  Legend,
+  Cell
 } from 'recharts';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -192,7 +193,7 @@ export default function App() {
       return null;
     }
   });
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'financials' | 'inventory' | 'setup'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'pos' | 'financials' | 'inventory' | 'setup' | 'profit'>('dashboard');
   const [config, setConfig] = useState<Config | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [prefetchedBills, setPrefetchedBills] = useState<Bill[] | null>(null);
@@ -238,7 +239,7 @@ export default function App() {
     }
   }, []);
   const [products, setProducts] = useState<Product[]>([]);
-  const [dashboardData, setDashboardData] = useState<{ lowStock: Product[], chartData: any[] }>({ lowStock: [], chartData: [] });
+  const [dashboardData, setDashboardData] = useState<any>({ lowStock: [], chartData: [], monthlySales: [], paymentMethods: [], totalSales: 0, totalTransactions: 0, totalItemsSold: 0 });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState('Walk-in Customer');
   const [paymentMethod, setPaymentMethod] = useState('CASH');
@@ -270,7 +271,12 @@ export default function App() {
       if (data && typeof data === 'object') {
         setDashboardData({
           lowStock: Array.isArray(data.lowStock) ? data.lowStock : [],
-          chartData: Array.isArray(data.chartData) ? data.chartData : []
+          chartData: Array.isArray(data.chartData) ? data.chartData : [],
+          monthlySales: Array.isArray(data.monthlySales) ? data.monthlySales : [],
+          paymentMethods: Array.isArray(data.paymentMethods) ? data.paymentMethods : [],
+          totalSales: typeof data.totalSales === 'number' ? data.totalSales : Number(data.totalSales) || 0,
+          totalTransactions: typeof data.totalTransactions === 'number' ? data.totalTransactions : Number(data.totalTransactions) || 0,
+          totalItemsSold: typeof data.totalItemsSold === 'number' ? data.totalItemsSold : Number(data.totalItemsSold) || 0
         });
       }
     } catch (err) {
@@ -718,6 +724,14 @@ export default function App() {
                   <Package size={18} />
                 </button>
               )}
+              {isAllowed('financials') && (
+                <button onClick={() => setActiveTab('profit')} className={cn(
+                  'p-2 rounded-md transition-colors text-sm font-semibold',
+                  activeTab === 'profit' ? 'bg-red-700/80 text-white' : 'text-slate-500 hover:bg-slate-100'
+                )}>
+                  <TrendingUp size={18} />
+                </button>
+              )}
               {user.role === 'ADMIN' && (
                 <button onClick={() => setActiveTab('setup')} className={cn(
                   'p-2 rounded-md transition-colors text-sm font-semibold',
@@ -780,6 +794,15 @@ export default function App() {
               )}>
                 <Package size={18} />
                 <span>Inventory</span>
+              </button>
+            )}
+            {isAllowed('financials') && (
+              <button onClick={() => setActiveTab('profit')} className={cn(
+                'w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-semibold',
+                activeTab === 'profit' ? 'bg-red-700/80 text-white' : 'text-slate-300 hover:bg-slate-800/60'
+              )}>
+                <TrendingUp size={18} />
+                <span>Profit Summary</span>
               </button>
             )}
             {user.role === 'ADMIN' && (
@@ -1194,8 +1217,12 @@ export default function App() {
           <FinancialsTab onEdit={editExistingBill} onNotify={setMessage} prefetchedBills={prefetchedBills} />
         )}
 
+        {activeTab === 'profit' && isAllowed('financials') && (
+          <ProfitTab />
+        )}
+
         {activeTab === 'inventory' && isAllowed('inventory') && (
-          <InventoryTab onRefresh={async () => { await fetchProducts(); await fetchDashboardData(); }} products={products} />
+          <InventoryTab currentUser={currentUser} onRefresh={async () => { await fetchProducts(); await fetchDashboardData(); }} products={products} />
         )}
 
         {activeTab === 'setup' && user.role === 'ADMIN' && (
@@ -1634,6 +1661,11 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
  */
 function DashboardTab({ data, onRefresh, onGoToInventory }: { data: any, onRefresh: () => void, onGoToInventory: () => void }) {
   const COLORS = ['#f24153', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+  const PAYMENT_COLORS: Record<string, string> = {
+    'QR': '#3b82f6',
+    'CASH': '#ef4444',
+    'UNKNOWN': '#9ca3af'
+  };
   const [isReady, setIsReady] = useState(false);
   const chartRef = useRef<HTMLDivElement | null>(null);
   const [chartCanRender, setChartCanRender] = useState(false);
@@ -1694,50 +1726,51 @@ function DashboardTab({ data, onRefresh, onGoToInventory }: { data: any, onRefre
         </button>
       </div>
 
+      {/* SUMMARY METRICS */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col">
+          <span className="text-xs text-slate-500 uppercase font-bold">Total Sales</span>
+          <span className="text-2xl font-black text-slate-900 mt-2">Nu. {(data?.totalSales || 0).toFixed ? (data.totalSales).toFixed(2) : Number(data?.totalSales || 0).toFixed(2)}</span>
+          <span className="text-[11px] text-slate-400 mt-2">Since inception (Active bills)</span>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col">
+          <span className="text-xs text-slate-500 uppercase font-bold">Total Transactions</span>
+          <span className="text-2xl font-black text-slate-900 mt-2">{data?.totalTransactions || 0}</span>
+          <span className="text-[11px] text-slate-400 mt-2">Completed bills</span>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col">
+          <span className="text-xs text-slate-500 uppercase font-bold">Total Items Sold</span>
+          <span className="text-2xl font-black text-slate-900 mt-2">{data?.totalItemsSold || 0}</span>
+          <span className="text-[11px] text-slate-400 mt-2">Units sold (Active)</span>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* SALES BY CATEGORY CHART */}
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
-          <div className="flex items-center justify-between mb-6">
+  {/* MONTHLY SALES TREND */}
+  <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-slate-800 flex items-center gap-2">
               <TrendingUp size={18} className="text-brand" />
-              Sales by Category
+              Monthly Sales Trend
             </h3>
-            <span className="text-[10px] font-bold uppercase text-slate-400 bg-slate-50 px-2 py-1 rounded">All Time</span>
+            <span className="text-[10px] font-bold uppercase text-slate-400 bg-slate-50 px-2 py-1 rounded">Last months</span>
           </div>
-          <div ref={chartRef} className={`${chartData.length <= 1 ? 'h-[200px]' : 'h-[300px]'} w-full transition-all duration-500 overflow-hidden min-h-0 min-w-0`} style={{ minWidth: 0, minHeight: 0 }}>
-            {chartCanRender && chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%" debounce={50}>
-                <BarChart data={chartData}>
+
+          <div className="w-full mb-4 flex-1" ref={chartRef} style={{ minWidth: 0, minHeight: 0 }}>
+            {chartCanRender && Array.isArray(data?.monthlySales) && data.monthlySales.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={data.monthlySales} margin={{ top: 6, right: 8, left: -8, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#94a3b8', fontSize: 12 }}
-                    dy={10}
-                  />
-                  <YAxis 
-                    scale="sqrt"
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#94a3b8', fontSize: 12 }}
-                    tickFormatter={(value) => `Nu. ${value}`}
-                  />
-                  <Tooltip 
-                    cursor={{ fill: '#f8fafc' }}
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={60}>
-                    {chartData.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `Nu. ${v}`} />
+                  <Tooltip contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 8px 12px -6px rgb(0 0 0 / 0.08)' }} />
+                  <Line type="monotone" dataKey="value" stroke="#ef4444" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
+                </LineChart>
               </ResponsiveContainer>
-            ) : chartData.length === 0 ? (
+            ) : (!data?.monthlySales || data.monthlySales.length === 0) ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-400">
                 <TrendingUp size={48} className="opacity-10 mb-2" />
-                <p className="text-sm font-medium">No sales data available yet</p>
+                <p className="text-sm font-medium">No monthly sales data available</p>
               </div>
             ) : (
               <div className="h-full flex items-center justify-center">
@@ -1745,49 +1778,99 @@ function DashboardTab({ data, onRefresh, onGoToInventory }: { data: any, onRefre
               </div>
             )}
           </div>
+
+          {/* (Payment method panel moved to the right column) */}
         </div>
 
-        {/* LOW STOCK ALERTS */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 flex flex-col">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-bold text-slate-800 flex items-center gap-2">
-              <AlertTriangle size={18} className="text-brand" />
-              Stock Alerts
-            </h3>
-            <span className="bg-brand-light text-brand text-[10px] font-bold px-2 py-1 rounded-full">
-              {lowStock.length} ITEMS
-            </span>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-            {lowStock.length > 0 ? (
-              lowStock.map((item: any) => (
-                <div key={item.ID} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between group hover:border-brand-border transition-all">
-                  <div>
-                    <p className="text-sm font-bold text-slate-800">{item.Name}</p>
-                    <p className="text-[10px] text-slate-400 font-medium uppercase">{item.Category}</p>
+        {/* RIGHT COLUMN: STOCK ALERTS + PAYMENT METHOD DISTRIBUTION */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <AlertTriangle size={18} className="text-brand" />
+                Stock Alerts
+              </h3>
+              <span className="bg-brand-light text-brand text-[10px] font-bold px-2 py-1 rounded-full">
+                {lowStock.length} ITEMS
+              </span>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+              {lowStock.length > 0 ? (
+                lowStock.map((item: any) => (
+                  <div key={item.ID} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between group hover:border-brand-border transition-all">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{item.Name}</p>
+                      <p className="text-[10px] text-slate-400 font-medium uppercase">{item.Category}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-black text-brand">{item.Stock} <span className="text-[10px] font-bold text-slate-400">/ {item.MinStock}</span></p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Left</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-black text-brand">{item.Stock} <span className="text-[10px] font-bold text-slate-400">/ {item.MinStock}</span></p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">Left</p>
-                  </div>
+                ))
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6">
+                  <CheckCircle2 size={48} className="text-brand mb-4 opacity-20" />
+                  <p className="text-slate-400 text-sm font-medium">All items are well stocked!</p>
                 </div>
-              ))
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center p-6">
-                <CheckCircle2 size={48} className="text-brand mb-4 opacity-20" />
-                <p className="text-slate-400 text-sm font-medium">All items are well stocked!</p>
-              </div>
-            )}
+              )}
+            </div>
+
+            <button 
+              onClick={onGoToInventory}
+              className="mt-6 w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+            >
+              MANAGE INVENTORY
+              <ChevronRight size={16} />
+            </button>
           </div>
 
-          <button 
-            onClick={onGoToInventory}
-            className="mt-6 w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
-          >
-            MANAGE INVENTORY
-            <ChevronRight size={16} />
-          </button>
+          {/* PAYMENT METHOD DISTRIBUTION */}
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <CreditCard size={18} className="text-brand" />
+                Payment Method Distribution
+              </h3>
+              <span className="text-[10px] font-bold uppercase text-slate-400">Revenue share</span>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="w-36 h-36" style={{ minWidth: 0, minHeight: 0 }}>
+                {Array.isArray(data?.paymentMethods) && data.paymentMethods.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={data.paymentMethods} dataKey="value" nameKey="name" innerRadius={28} outerRadius={56} paddingAngle={4}>
+                        {data.paymentMethods.map((entry: any, idx: number) => (
+                          <Cell key={`cell-pm-${idx}`} fill={PAYMENT_COLORS[(String(entry.name) || '').toUpperCase()] || (COLORS[idx % COLORS.length])} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: any) => `Nu. ${Number(value).toFixed(2)}`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-sm text-slate-400">No payment data</div>
+                )}
+              </div>
+
+              <div className="flex-1">
+                {Array.isArray(data?.paymentMethods) && data.paymentMethods.length > 0 ? (
+                  <div className="space-y-3">
+                    {data.paymentMethods.map((m: any, i: number) => (
+                      <div key={`pm-legend-${i}`} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 rounded" style={{ backgroundColor: PAYMENT_COLORS[(String(m.name) || '').toUpperCase()] || COLORS[i % COLORS.length] }} />
+                          <div className="text-sm font-medium text-slate-700">{m.name}</div>
+                        </div>
+                        <div className="text-sm font-bold text-slate-900">Nu. {(Number(m.value) || 0).toFixed(2)}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2242,15 +2325,135 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
 }
 
 /**
+ * PROFIT SUMMARY TAB
+ */
+function ProfitTab() {
+  const [loading, setLoading] = useState(true);
+  const [profit, setProfit] = useState<any>(null);
+  const [startMonth, setStartMonth] = useState<string | null>(null);
+  const [endMonth, setEndMonth] = useState<string | null>(null);
+
+  const fetchProfit = useCallback(async (opts?: { startMonth?: string | null; endMonth?: string | null }) => {
+    try {
+      const params = new URLSearchParams({ action: 'getProfitData' });
+      if (opts?.startMonth) params.set('startMonth', opts.startMonth);
+      if (opts?.endMonth) params.set('endMonth', opts.endMonth);
+      const res = await fetch(`${WEB_APP_URL}?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch profit data');
+      const data = await res.json();
+      setProfit(data);
+    } catch (err) {
+      console.error('fetchProfit error', err);
+      setProfit(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      await fetchProfit({ startMonth, endMonth });
+      if (mounted) setLoading(false);
+    })();
+    return () => { mounted = false; };
+  }, [fetchProfit]);
+
+  // compute profit based solely on revenue and cogs
+  const revenue = Number(profit?.totalRevenue || 0);
+  const cogs = Number(profit?.cogs || 0);
+  const net = revenue - cogs;
+  const margin = revenue > 0 ? (net / revenue) * 100 : 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-black text-slate-800 tracking-tight">Profit Summary</h2>
+        <button onClick={() => fetchProfit()} className="p-2 hover:bg-white rounded-xl border border-slate-200 text-slate-500 transition-all">
+          <History size={20} />
+        </button>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+        <div className="mb-4 flex gap-3 items-center">
+          <label className="text-sm text-slate-500">Start</label>
+          <input type="month" value={startMonth || ''} onChange={(e) => setStartMonth(e.target.value || null)} className="px-3 py-2 border rounded-lg text-sm" />
+          <label className="text-sm text-slate-500">End</label>
+          <input type="month" value={endMonth || ''} onChange={(e) => setEndMonth(e.target.value || null)} className="px-3 py-2 border rounded-lg text-sm" />
+          <button onClick={() => fetchProfit({ startMonth, endMonth })} className="px-3 py-2 rounded-lg bg-brand text-white text-sm">Apply</button>
+        </div>
+
+        {loading ? (
+          <div className="h-32 flex items-center justify-center"><div className="w-6 h-6 border-4 border-slate-100 border-t-brand rounded-full animate-spin" /></div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="p-4 bg-slate-50 rounded-lg">
+              <div className="text-xs text-slate-500 uppercase font-bold">Total Revenue</div>
+              <div className="text-2xl font-black">Nu. {revenue.toFixed(2)}</div>
+            </div>
+            <div className="p-4 bg-slate-50 rounded-lg">
+              <div className="text-xs text-slate-500 uppercase font-bold">Total Cost (COGS)</div>
+              <div className="text-2xl font-black">Nu. {cogs.toFixed(2)}</div>
+            </div>
+            <div className="p-4 bg-slate-50 rounded-lg">
+              <div className="text-xs text-slate-500 uppercase font-bold">Profit (Revenue − Cost)</div>
+              <div className="text-2xl font-black">Nu. {net.toFixed(2)}</div>
+            </div>
+            <div className="p-4 bg-slate-50 rounded-lg">
+              <div className="text-xs text-slate-500 uppercase font-bold">Margin</div>
+              <div className="text-2xl font-black">{margin.toFixed(1)}%</div>
+            </div>
+          </div>
+        )}
+      </div>
+      {!loading && (
+        <div>
+          <ProfitTrendChart data={profit?.monthlyProfit} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * PROFIT TREND CHART
+ * Render a monthly profit line chart below the summary cards with hover markers
+ */
+function ProfitTrendChart({ data }: { data: Array<{ month: string; name: string; profit: number }> | undefined }) {
+  if (!Array.isArray(data) || data.length === 0) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 text-center text-sm text-slate-500">No profit data available for the selected period.</div>
+    );
+  }
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+      <h3 className="text-lg font-bold mb-3">Profit Trend (monthly)</h3>
+      <div style={{ width: '100%', height: 320 }}>
+        <ResponsiveContainer>
+          <LineChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" />
+            <YAxis />
+            <Tooltip formatter={(value: any) => (typeof value === 'number' ? `Nu. ${value.toFixed(2)}` : value)} />
+            <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+/**
  * INVENTORY TAB
  */
-function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh: () => void }) {
+function InventoryTab({ products, onRefresh, currentUser }: { products: Product[], onRefresh: () => void, currentUser: string | null }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [editLoading, setEditLoading] = useState(false);
+  const [editAction, setEditAction] = useState<'update' | 'restock'>('update');
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
@@ -2365,10 +2568,26 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
     try {
       const res = await fetch(WEB_APP_URL, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'saveProduct', product })
       });
       const data = await res.json();
       if (data.success) {
+        // If user wanted to record this as a purchase, post a purchase transaction
+        const formData = new FormData(e.currentTarget as HTMLFormElement);
+        const asPurchase = !!formData.get('pAsPurchase');
+        const billNo = (formData.get('pBill') as string) || `PUR-${Date.now()}`;
+        const vendor = (formData.get('pVendor') as string) || product.Vendor || 'General';
+        const qty = Number(product.Stock) || 0;
+        const cost = Number(product.Cost) || 0;
+        if (asPurchase && qty > 0) {
+          try {
+            await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'postPurchase', billNo, supplier: vendor, items: [{ itemId: data.id || product.ID, itemName: product.Name, qty, cost }], user: currentUser }) });
+          } catch (err) {
+            console.error('Failed to post purchase for new product', err);
+          }
+        }
+
         setShowAddModal(false);
         setIsAddingNewCategory(false);
         onRefresh();
@@ -2582,7 +2801,7 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
                         <Barcode size={18} />
                       </button>
                       <button 
-                        onClick={() => { setEditProduct(p); setShowEditModal(true); }}
+                        onClick={() => { setEditProduct(p); setEditAction('update'); setShowEditModal(true); }}
                         className="p-2 ml-2 text-slate-400 hover:text-brand rounded-lg transition-all"
                         title="Edit / Restock"
                       >
@@ -2693,6 +2912,18 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
                   <input id="pVendor" name="pVendor" type="text" placeholder="Vendor name (optional)" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium" />
                 </div>
 
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Record as Purchase?</label>
+                  <div className="flex items-center gap-3">
+                    <label className="inline-flex items-center gap-2"><input id="pAsPurchase" name="pAsPurchase" type="checkbox" /> <span className="text-sm">Yes, record initial stock as a purchase</span></label>
+                  </div>
+                </div>
+
+                <div id="pBillWrapper" className="space-y-1.5 sm:col-span-2">
+                  <label htmlFor="pBill" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Bill Number (optional)</label>
+                  <input id="pBill" name="pBill" type="text" placeholder="e.g. P-INV-001" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium" />
+                </div>
+
                 {isAddingNewCategory && (
                   <div className="space-y-1.5 sm:col-span-2 animate-in slide-in-from-top-2 duration-200">
                     <label htmlFor="newCat" className="text-[10px] font-bold uppercase text-brand tracking-wider">New Category Name</label>
@@ -2775,11 +3006,14 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
                 const setStockVal = formData.get('eStock') as string;
                 const restockVal = formData.get('eRestock') as string;
                 let newStock = editProduct.Stock;
-                if (restockVal) {
-                  const add = parseFloat(restockVal || '0');
-                  newStock = newStock + (isNaN(add) ? 0 : add);
-                } else if (setStockVal) {
-                  newStock = parseFloat(setStockVal || String(editProduct.Stock));
+                const restockAmount = restockVal ? parseFloat(restockVal || '0') : 0;
+                if (editAction === 'update') {
+                  if (restockVal) {
+                    const add = parseFloat(restockVal || '0');
+                    newStock = newStock + (isNaN(add) ? 0 : add);
+                  } else if (setStockVal) {
+                    newStock = parseFloat(setStockVal || String(editProduct.Stock));
+                  }
                 }
 
                 const product = {
@@ -2794,14 +3028,39 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
                   Vendor: vendor
                 };
 
-                const res = await fetch(WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'saveProduct', product }) });
-                const data = await res.json();
-                if (data.success) {
-                  setShowEditModal(false);
-                  setEditProduct(null);
-                  onRefresh();
+                // If user chose to restock via purchase, call postPurchase after saving product metadata
+                if (editAction === 'restock' && restockAmount > 0) {
+                  // Save product metadata but do not override Stock (let postPurchase update stock)
+                  const saveProd = { ...product, Stock: editProduct.Stock };
+                  const resSave = await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'saveProduct', product: saveProd }) });
+                  const saved = await resSave.json();
+                  if (!saved.success) {
+                    console.error('Failed to save product metadata before purchase', saved);
+                  }
+
+                  const billNo = (formData.get('eBill') as string) || `PUR-${Date.now()}`;
+                  const supplier = vendor || 'General';
+                  const items = [{ itemId: editProduct.ID, itemName: product.Name, qty: restockAmount, cost }];
+                  const res = await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'postPurchase', billNo, supplier, items, user: currentUser }) });
+                  const data = await res.json();
+                  if (data && data.success) {
+                    setShowEditModal(false);
+                    setEditProduct(null);
+                    onRefresh();
+                  } else {
+                    console.error('Failed to post purchase', data);
+                  }
                 } else {
-                  console.error('Failed to save product', data);
+                  // Normal update: save product including new stock value
+                  const res = await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'saveProduct', product }) });
+                  const data = await res.json();
+                  if (data.success) {
+                    setShowEditModal(false);
+                    setEditProduct(null);
+                    onRefresh();
+                  } else {
+                    console.error('Failed to save product', data);
+                  }
                 }
               } catch (err) {
                 console.error(err);
@@ -2809,6 +3068,19 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
                 setEditLoading(false);
               }
             }} className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-600">Action</label>
+                <div className="flex items-center gap-4">
+                  <label className={cn('inline-flex items-center gap-2 cursor-pointer')}>
+                    <input type="radio" name="editAction" checked={editAction === 'update'} onChange={() => setEditAction('update')} />
+                    <span className="text-sm">Update Product</span>
+                  </label>
+                  <label className={cn('inline-flex items-center gap-2 cursor-pointer')}>
+                    <input type="radio" name="editAction" checked={editAction === 'restock'} onChange={() => setEditAction('restock')} />
+                    <span className="text-sm">Restock (Purchase)</span>
+                  </label>
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-1.5 sm:col-span-2">
                   <label htmlFor="eName" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Product Name</label>
@@ -2842,6 +3114,12 @@ function InventoryTab({ products, onRefresh }: { products: Product[], onRefresh:
                   <label htmlFor="eRestock" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Restock Amount (add)</label>
                   <input id="eRestock" name="eRestock" placeholder="e.g. 10 to add 10 units" type="number" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium" />
                 </div>
+                {editAction === 'restock' && (
+                  <div className="space-y-1.5">
+                    <label htmlFor="eBill" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Bill Number (purchase)</label>
+                    <input id="eBill" name="eBill" placeholder="e.g. P-INV-001" type="text" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium" />
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <label htmlFor="eMin" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Min Stock Alert</label>
                   <input id="eMin" name="eMin" defaultValue={String(editProduct.MinStock)} type="number" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium" />

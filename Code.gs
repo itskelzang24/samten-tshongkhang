@@ -4,7 +4,9 @@
  * Logic preserved from original version
  */
 
-const SS = SpreadsheetApp.getActiveSpreadsheet();
+if (typeof SS === 'undefined') {
+  var SS = SpreadsheetApp.getActiveSpreadsheet();
+}
 
 const SHEET_NAMES = {
   PRODUCTS: 'Products',
@@ -41,6 +43,8 @@ function doGet(e) {
         return jsonResponse(listBillsDebug(e.parameter.limit || 20));
       case 'getDashboardData':
         return jsonResponse(getDashboardData());
+      case 'getProfitData':
+        return jsonResponse(getProfitData({ startMonth: e.parameter.startMonth, endMonth: e.parameter.endMonth }));
       case 'login':
         return jsonResponse(login(e.parameter.username, e.parameter.password));
       default:
@@ -52,7 +56,36 @@ function doGet(e) {
 }
 
 function doPost(e) {
-  const body = JSON.parse(e.postData.contents);
+  // Robust POST body parsing: accept JSON or form-encoded bodies and
+  // provide clearer error messages. e.postData.type may be undefined in
+  // some hosting/configurations, so fall back safely.
+  let body = {};
+  try {
+    const raw = e && e.postData && e.postData.contents ? String(e.postData.contents) : '';
+    const contentType = e && e.postData && e.postData.type ? String(e.postData.type).toLowerCase() : '';
+
+    if (contentType.indexOf('application/json') !== -1) {
+      body = JSON.parse(raw || '{}');
+    } else if (contentType.indexOf('application/x-www-form-urlencoded') !== -1 || (raw && raw.indexOf('=') !== -1)) {
+      // parse form-encoded body into an object
+      const params = {};
+      raw.split('&').forEach(pair => {
+        const idx = pair.indexOf('=');
+        if (idx > -1) {
+          const k = decodeURIComponent(pair.substring(0, idx));
+          const v = decodeURIComponent(pair.substring(idx + 1));
+          params[k] = v;
+        }
+      });
+      body = params;
+    } else if (raw) {
+      // try JSON parse as a last resort
+      try { body = JSON.parse(raw); } catch (err) { body = {}; }
+    }
+  } catch (err) {
+    return jsonResponse({ error: 'Bad POST body: ' + String(err) }, 400);
+  }
+
   const action = body.action;
   const lock = LockService.getScriptLock();
 
@@ -77,6 +110,9 @@ function doPost(e) {
           return jsonResponse(updatePermissions(body));
         case 'updateConfig':
           return jsonResponse(updateConfig(body));
+        
+        case 'getProfitData':
+          return jsonResponse(getProfitData({ startMonth: body.startMonth, endMonth: body.endMonth }));
         case 'clearCache':
           return jsonResponse(clearCaches(body));
         default:
@@ -815,6 +851,7 @@ function updateConfig(body) {
 function getDashboardData() {
   const products = getSheetData(SHEET_NAMES.PRODUCTS);
   const lines = getSheetData(SHEET_NAMES.SALES_LINES);
+  const bills = getSheetData(SHEET_NAMES.SALES_BILLS);
 
   const lowStock = products.filter(p => Number(p.Stock) <= Number(p.MinStock));
 
@@ -824,25 +861,173 @@ function getDashboardData() {
     productMap[String(products[i].ID)] = products[i];
   }
 
+  // Sales by category (existing behavior)
   const salesByCategory = {};
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (line.Status === 'ACTIVE' && line.LineType === 'SALE') {
+    if (line.Status === 'ACTIVE' && (line.LineType === 'SALE' || String(line.LineType).toUpperCase() === 'SALE')) {
       const product = productMap[String(line.ItemID)];
       const category = product ? product.Category : 'Unknown';
       salesByCategory[category] = (salesByCategory[category] || 0) + Number(line.LineTotal || 0);
     }
   }
 
-  const chartData = Object.keys(salesByCategory).map(cat => ({
-    name: cat,
-    value: salesByCategory[cat]
-  }));
+  const chartData = Object.keys(salesByCategory).map(cat => ({ name: cat, value: salesByCategory[cat] }));
+
+  // Summary metrics and aggregations for dashboard
+  let totalSales = 0;
+  let totalTransactions = 0;
+  let totalItemsSold = 0;
+
+  // Payment method totals (sum of GrandTotal per method)
+  const paymentTotals = {};
+
+  // Monthly sales aggregation (keyed by yyyy-MM)
+  const monthlyMap = {};
+
+  for (let i = 0; i < bills.length; i++) {
+    const b = bills[i];
+    const status = b.Status || '';
+    // treat only ACTIVE bills as completed sales
+    if (String(status).toUpperCase() !== 'ACTIVE') continue;
+
+    const grand = Number(b.GrandTotal || 0) || 0;
+    totalSales += grand;
+    totalTransactions += 1;
+
+    const method = b.Method || 'UNKNOWN';
+    paymentTotals[method] = (paymentTotals[method] || 0) + grand;
+
+    // month key
+    const dt = b.DateTime ? new Date(b.DateTime) : null;
+    if (dt && !isNaN(dt.getTime())) {
+      const key = Utilities.formatDate(dt, getTZ(), 'yyyy-MM');
+      monthlyMap[key] = (monthlyMap[key] || 0) + grand;
+    }
+  }
+
+  // Sum items sold from sales lines (only SALE lines, ACTIVE)
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    if (ln.Status === 'ACTIVE' && (ln.LineType === 'SALE' || String(ln.LineType).toUpperCase() === 'SALE')) {
+      totalItemsSold += Number(ln.Qty || 0) || 0;
+    }
+  }
+
+  // Build monthly array sorted by month
+  const monthlyKeys = Object.keys(monthlyMap).sort();
+  const monthlySales = monthlyKeys.map(k => {
+    // Format label like 'Jan 2026'
+    const parts = k.split('-');
+    const year = Number(parts[0]);
+    const month = Number(parts[1]) - 1;
+    const label = Utilities.formatDate(new Date(year, month, 1), getTZ(), 'MMM yyyy');
+    return { month: k, name: label, value: monthlyMap[k] };
+  });
+
+  // Payment methods array for pie chart
+  const paymentMethods = Object.keys(paymentTotals).map(m => ({ name: String(m), value: paymentTotals[m] }));
 
   return {
     lowStock,
-    chartData
+    chartData,
+    monthlySales,
+    paymentMethods,
+    totalSales,
+    totalTransactions,
+    totalItemsSold
   };
+}
+
+// ------------------------------
+// Profitability
+// ------------------------------
+
+// Simplified profit data: return only revenue and COGS (cost of goods sold).
+// This avoids scanning purchases/expenses sheets as requested.
+function getProfitData(params) {
+  // Read sheets once
+  const products = getSheetData(SHEET_NAMES.PRODUCTS);
+  const bills = getSheetData(SHEET_NAMES.SALES_BILLS);
+  const lines = getSheetData(SHEET_NAMES.SALES_LINES);
+
+  // Build product cost map for fast lookup
+  const productCost = {};
+  for (let i = 0; i < products.length; i++) {
+    const id = String(products[i].ID);
+    productCost[id] = Number(products[i].Cost || 0) || 0;
+  }
+
+  const tz = getTZ();
+
+  // Map billNo -> monthKey (yyyy-MM) and aggregate revenue per month
+  const billMonth = {};
+  const monthlyRevenue = {};
+  let totalRevenue = 0;
+
+  for (let i = 0; i < bills.length; i++) {
+    const b = bills[i];
+    if (String(b.Status || '').toUpperCase() !== 'ACTIVE') continue;
+    const billNo = String(b.BillNo || '');
+    const dt = b.DateTime ? new Date(b.DateTime) : null;
+    const monthKey = dt && !isNaN(dt.getTime()) ? Utilities.formatDate(dt, tz, 'yyyy-MM') : 'unknown';
+    // If params provided, filter bills outside the requested month range
+    if (params && (params.startMonth || params.endMonth)) {
+      const startM = params.startMonth || null;
+      const endM = params.endMonth || null;
+      if (monthKey === 'unknown') continue;
+      if (startM && monthKey < startM) continue;
+      if (endM && monthKey > endM) continue;
+    }
+    billMonth[billNo] = monthKey;
+    const grand = Number(b.GrandTotal || 0) || 0;
+    monthlyRevenue[monthKey] = (monthlyRevenue[monthKey] || 0) + grand;
+    totalRevenue += grand;
+  }
+
+  // Aggregate COGS per month by mapping each SALE line to its bill's month
+  const monthlyCogs = {};
+  let totalCogs = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    if (String(ln.Status || '').toUpperCase() !== 'ACTIVE') continue;
+    const lineType = String(ln.LineType || ln.LineType || '').toUpperCase();
+    if (lineType !== 'SALE') continue;
+    const billNo = String(ln.BillNo || '');
+    let monthKey = billMonth[billNo] || (ln.DateTime ? Utilities.formatDate(new Date(ln.DateTime), tz, 'yyyy-MM') : 'unknown');
+    // If billMonth mapping not present, and params provided, derive monthKey and filter
+    if (params && (params.startMonth || params.endMonth) && monthKey !== 'unknown') {
+      const startM = params.startMonth || null;
+      const endM = params.endMonth || null;
+      if (startM && monthKey < startM) continue;
+      if (endM && monthKey > endM) continue;
+    }
+    const qty = Number(ln.Qty || ln.qty || 0) || 0;
+    const costPer = productCost[String(ln.ItemID)] || 0;
+    const lineCost = qty * costPer;
+    monthlyCogs[monthKey] = (monthlyCogs[monthKey] || 0) + lineCost;
+    totalCogs += lineCost;
+  }
+
+  // Build sorted monthlyProfit array (include months appearing in revenue or cogs)
+  const monthKeysSet = {};
+  Object.keys(monthlyRevenue).forEach(k => monthKeysSet[k] = true);
+  Object.keys(monthlyCogs).forEach(k => monthKeysSet[k] = true);
+  const monthKeys = Object.keys(monthKeysSet).filter(k => k !== 'unknown').sort();
+
+  const monthlyProfit = monthKeys.map(k => {
+    const rev = monthlyRevenue[k] || 0;
+    const cost = monthlyCogs[k] || 0;
+    const profit = rev - cost;
+    const parts = k.split('-');
+    const year = Number(parts[0]);
+    const month = Number(parts[1]) - 1;
+    const name = Utilities.formatDate(new Date(year, month, 1), tz, 'MMM yyyy');
+    return { month: k, name, profit };
+  });
+
+  return { totalRevenue, cogs: totalCogs, monthlyProfit };
 }
 
 // Reopen (unlock) a bill so it becomes editable again. This only flips the
