@@ -833,6 +833,7 @@ export default function App() {
             data={dashboardData} 
             onRefresh={fetchDashboardData} 
             onGoToInventory={() => setActiveTab('inventory')}
+            userRole={user?.role}
           />
         )}
         {activeTab === 'pos' && isAllowed('pos') && (
@@ -1659,7 +1660,7 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
 /**
  * DASHBOARD TAB
  */
-function DashboardTab({ data, onRefresh, onGoToInventory }: { data: any, onRefresh: () => void, onGoToInventory: () => void }) {
+function DashboardTab({ data, onRefresh, onGoToInventory, userRole }: { data: any, onRefresh: () => void, onGoToInventory: () => void, userRole?: string }) {
   const COLORS = ['#f24153', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
   const PAYMENT_COLORS: Record<string, string> = {
     'QR': '#3b82f6',
@@ -1710,6 +1711,44 @@ function DashboardTab({ data, onRefresh, onGoToInventory }: { data: any, onRefre
   // Defensive checks
   const chartData = Array.isArray(data?.chartData) ? data.chartData : [];
   const lowStock = Array.isArray(data?.lowStock) ? data.lowStock : [];
+
+  // Non-admin (staff) simplified dashboard: show only stock alerts, total transactions, and total items sold
+  if (userRole && userRole !== 'ADMIN') {
+    const lowStockArr = lowStock;
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-black text-slate-800 tracking-tight">Overview</h2>
+            <p className="text-sm text-slate-500 font-medium">Quick summary</p>
+          </div>
+          <button onClick={onRefresh} className="p-2 hover:bg-white rounded-xl border border-slate-200 text-slate-500 transition-all">
+            <History size={20} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col">
+            <span className="text-xs text-slate-500 uppercase font-bold">Stock Alerts</span>
+            <span className="text-2xl font-black text-slate-900 mt-2">{lowStockArr.length}</span>
+            <span className="text-[11px] text-slate-400 mt-2">Items at or below minimum stock</span>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col">
+            <span className="text-xs text-slate-500 uppercase font-bold">Total Transactions</span>
+            <span className="text-2xl font-black text-slate-900 mt-2">{data?.totalTransactions || 0}</span>
+            <span className="text-[11px] text-slate-400 mt-2">Completed bills</span>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col">
+            <span className="text-xs text-slate-500 uppercase font-bold">Total Items Sold</span>
+            <span className="text-2xl font-black text-slate-900 mt-2">{data?.totalItemsSold || 0}</span>
+            <span className="text-[11px] text-slate-400 mt-2">Units sold (Active)</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
