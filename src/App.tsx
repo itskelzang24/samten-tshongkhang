@@ -2781,7 +2781,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">Inventory Management</h2>
           <p className="text-sm text-slate-500 font-medium">{products.length} products in catalog</p>
         </div>
-        <div className="flex items-center gap-3">
+  <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500">Labels per sheet</span>
             <div className="inline-flex rounded-lg bg-slate-50 p-1 border border-slate-100">
@@ -2847,7 +2847,8 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
             <button onClick={() => setInventorySearch('')} className="text-slate-400 hover:text-slate-600">Clear</button>
           )}
         </div>
-        <div className="overflow-x-auto">
+        {/* Desktop/table view */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-100 bg-slate-50/50">
@@ -2964,6 +2965,44 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile list view: stacked cards for small screens */}
+        <div className="block sm:hidden p-3 space-y-3">
+          {(filteredProducts || []).length === 0 ? (
+            <div className="p-4 bg-slate-50 rounded-lg text-slate-500 text-sm">No products found</div>
+          ) : (
+            (filteredProducts || []).map(p => (
+              <div key={`mobile-${p.ID}`} className="bg-white border border-slate-100 rounded-lg p-3 shadow-sm flex items-start justify-between">
+                <div className="min-w-0">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0">
+                      <div className="bg-white p-1 border border-slate-100 rounded shadow-sm inline-block w-20">
+                        <BarcodeComponent value={p.ID.toString()} width={0.6} height={18} displayValue={false} margin={0} />
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-800 truncate">{p.Name}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{p.Unit} • <span className="font-mono">{p.ID}</span></p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-bold rounded-md uppercase">{p.Category}</span>
+                        <span className={cn("text-sm font-black", p.Stock <= p.MinStock ? 'text-brand' : 'text-slate-800')}>{p.Stock}</span>
+                        <span className="text-[11px] text-slate-400">/ {p.MinStock}</span>
+                      </div>
+                      <div className="mt-2 text-[13px] text-slate-600">Cost: <span className="font-bold">Nu. {p.Cost.toFixed(2)}</span> • Sell: <span className="font-bold text-brand">Nu. {p.Selling.toFixed(2)}</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div className="ml-3 flex-shrink-0 flex flex-col items-end gap-2">
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => printBarcode(p.ID.toString())} className="p-2 text-slate-400 hover:text-brand rounded-lg transition-all" title="Print Barcode"><Barcode size={16} /></button>
+                    <button onClick={() => { setEditProduct(p); setEditAction('update'); setShowEditModal(true); }} className="p-2 text-slate-400 hover:text-brand rounded-lg transition-all" title="Edit / Restock"><Edit size={16} /></button>
+                  </div>
+                  <div className="text-[11px] text-slate-400">{p.Stock <= p.MinStock ? 'Low stock' : 'Healthy'}</div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
