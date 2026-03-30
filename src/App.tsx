@@ -253,6 +253,7 @@ export default function App() {
   const [showReceipt, setShowReceipt] = useState(false);
   const receiptRef = useRef<HTMLDivElement>(null);
   const [returnToTab, setReturnToTab] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handlePrint = useReactToPrint({
     contentRef: receiptRef,
@@ -688,59 +689,81 @@ export default function App() {
             </div>
           </div>
 
-          {/* Small-screen navigation: compact horizontal nav on small devices; full sidebar remains for md+ */}
+          {/* Top navigation: responsive (mobile uses overlay menu) */}
 
           <div className="flex items-center gap-4">
-            <nav className="flex md:hidden items-center gap-1">
+            {/* Desktop nav (md+) */}
+            <nav className="hidden md:flex items-center gap-1 overflow-x-auto no-scrollbar">
               {isAllowed('dashboard') && (
                 <button onClick={() => setActiveTab('dashboard')} className={cn(
-                  'p-2 rounded-md transition-colors text-sm font-semibold',
+                  'px-3 py-2 rounded-md transition-colors text-sm font-semibold flex items-center gap-2',
                   activeTab === 'dashboard' ? 'bg-red-700/80 text-white' : 'text-slate-500 hover:bg-slate-100'
                 )}>
                   <LayoutDashboard size={18} />
+                  <span className="whitespace-nowrap">Dashboard</span>
                 </button>
               )}
               {isAllowed('pos') && (
                 <button onClick={() => setActiveTab('pos')} className={cn(
-                  'p-2 rounded-md transition-colors text-sm font-semibold',
+                  'px-3 py-2 rounded-md transition-colors text-sm font-semibold flex items-center gap-2',
                   activeTab === 'pos' ? 'bg-red-700/80 text-white' : 'text-slate-500 hover:bg-slate-100'
                 )}>
                   <ShoppingCart size={18} />
+                  <span className="whitespace-nowrap">Point of Sale</span>
                 </button>
               )}
               {isAllowed('financials') && (
                 <button onClick={() => setActiveTab('financials')} className={cn(
-                  'p-2 rounded-md transition-colors text-sm font-semibold',
+                  'px-3 py-2 rounded-md transition-colors text-sm font-semibold flex items-center gap-2',
                   activeTab === 'financials' ? 'bg-red-700/80 text-white' : 'text-slate-500 hover:bg-slate-100'
                 )}>
                   <History size={18} />
+                  <span className="whitespace-nowrap">Financials</span>
                 </button>
               )}
               {isAllowed('inventory') && (
                 <button onClick={() => setActiveTab('inventory')} className={cn(
-                  'p-2 rounded-md transition-colors text-sm font-semibold',
+                  'px-3 py-2 rounded-md transition-colors text-sm font-semibold flex items-center gap-2',
                   activeTab === 'inventory' ? 'bg-red-700/80 text-white' : 'text-slate-500 hover:bg-slate-100'
                 )}>
                   <Package size={18} />
+                  <span className="whitespace-nowrap">Inventory</span>
                 </button>
               )}
               {isAllowed('financials') && (
                 <button onClick={() => setActiveTab('profit')} className={cn(
-                  'p-2 rounded-md transition-colors text-sm font-semibold',
+                  'px-3 py-2 rounded-md transition-colors text-sm font-semibold flex items-center gap-2',
                   activeTab === 'profit' ? 'bg-red-700/80 text-white' : 'text-slate-500 hover:bg-slate-100'
                 )}>
                   <TrendingUp size={18} />
+                  <span className="whitespace-nowrap">Profit Summary</span>
                 </button>
               )}
               {user.role === 'ADMIN' && (
                 <button onClick={() => setActiveTab('setup')} className={cn(
-                  'p-2 rounded-md transition-colors text-sm font-semibold',
+                  'px-3 py-2 rounded-md transition-colors text-sm font-semibold flex items-center gap-2',
                   activeTab === 'setup' ? 'bg-red-700/80 text-white' : 'text-slate-500 hover:bg-slate-100'
                 )}>
                   <Settings size={18} />
+                  <span className="whitespace-nowrap">Setup</span>
                 </button>
               )}
             </nav>
+
+            {/* Mobile menu button (shown on small screens) */}
+            <button
+              onClick={() => setMobileMenuOpen(v => !v)}
+              className="md:hidden p-2 rounded-md bg-white border border-slate-200 text-slate-600"
+              aria-label="Open menu"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                {mobileMenuOpen ? (
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                ) : (
+                  <path fillRule="evenodd" d="M3 5h14a1 1 0 010 2H3a1 1 0 110-2zm0 4h14a1 1 0 010 2H3a1 1 0 110-2zm0 4h14a1 1 0 010 2H3a1 1 0 110-2z" clipRule="evenodd" />
+                )}
+              </svg>
+            </button>
 
             <div className="hidden md:flex flex-col items-end">
               <span className="text-sm font-semibold text-slate-700">{user.username}</span>
@@ -757,75 +780,29 @@ export default function App() {
         </div>
       </header>
 
-      <div className="flex">
-  <aside className="hidden md:flex flex-col w-64 h-[calc(100vh-64px)] sticky top-16 bg-slate-900 text-white shadow-lg">
-          <nav className="mt-4 flex-1 px-2 space-y-1">
-            {isAllowed('dashboard') && (
-              <button onClick={() => setActiveTab('dashboard')} className={cn(
-                'w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-semibold',
-                activeTab === 'dashboard' ? 'bg-red-700/80 text-white' : 'text-slate-300 hover:bg-slate-800/60'
-              )}>
-                <LayoutDashboard size={18} />
-                <span>Dashboard</span>
+      {/* Mobile navigation overlay */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm md:hidden">
+          <div className="absolute top-0 right-0 left-0 p-4 bg-white shadow-lg">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Menu</h3>
+              <button onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-md text-slate-600 border border-slate-200 bg-white">
+                <X size={18} />
               </button>
-            )}
-            {isAllowed('pos') && (
-              <button onClick={() => setActiveTab('pos')} className={cn(
-                'w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-semibold',
-                activeTab === 'pos' ? 'bg-red-700/80 text-white' : 'text-slate-300 hover:bg-slate-800/60'
-              )}>
-                <ShoppingCart size={18} />
-                <span>Point of Sale</span>
-              </button>
-            )}
-            {isAllowed('financials') && (
-              <button onClick={() => setActiveTab('financials')} className={cn(
-                'w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-semibold',
-                activeTab === 'financials' ? 'bg-red-700/80 text-white' : 'text-slate-300 hover:bg-slate-800/60'
-              )}>
-                <History size={18} />
-                <span>Financials</span>
-              </button>
-            )}
-            {isAllowed('inventory') && (
-              <button onClick={() => setActiveTab('inventory')} className={cn(
-                'w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-semibold',
-                activeTab === 'inventory' ? 'bg-red-700/80 text-white' : 'text-slate-300 hover:bg-slate-800/60'
-              )}>
-                <Package size={18} />
-                <span>Inventory</span>
-              </button>
-            )}
-            {isAllowed('financials') && (
-              <button onClick={() => setActiveTab('profit')} className={cn(
-                'w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-semibold',
-                activeTab === 'profit' ? 'bg-red-700/80 text-white' : 'text-slate-300 hover:bg-slate-800/60'
-              )}>
-                <TrendingUp size={18} />
-                <span>Profit Summary</span>
-              </button>
-            )}
-            {user.role === 'ADMIN' && (
-              <button onClick={() => setActiveTab('setup')} className={cn(
-                'w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-semibold',
-                activeTab === 'setup' ? 'bg-red-700/80 text-white' : 'text-slate-300 hover:bg-slate-800/60'
-              )}>
-                <Settings size={18} />
-                <span>Setup</span>
-              </button>
-            )}
-          </nav>
-          <div className="px-4 py-4 border-t border-slate-800 text-[12px] text-slate-400">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center text-red-300">{user.username?.charAt(0)}</div>
-              <div>
-                <div className="text-sm font-semibold text-white">{user.username}</div>
-                <div className="text-[11px] text-slate-400">{user.role}</div>
-              </div>
             </div>
+            <nav className="mt-4 space-y-2">
+              {isAllowed('dashboard') && <button onClick={() => { setActiveTab('dashboard'); setMobileMenuOpen(false); }} className={cn('w-full text-left px-4 py-2 rounded-md', activeTab === 'dashboard' ? 'bg-red-700/80 text-white' : 'text-slate-700 hover:bg-slate-50')}>Dashboard</button>}
+              {isAllowed('pos') && <button onClick={() => { setActiveTab('pos'); setMobileMenuOpen(false); }} className={cn('w-full text-left px-4 py-2 rounded-md', activeTab === 'pos' ? 'bg-red-700/80 text-white' : 'text-slate-700 hover:bg-slate-50')}>POS</button>}
+              {isAllowed('financials') && <button onClick={() => { setActiveTab('financials'); setMobileMenuOpen(false); }} className={cn('w-full text-left px-4 py-2 rounded-md', activeTab === 'financials' ? 'bg-red-700/80 text-white' : 'text-slate-700 hover:bg-slate-50')}>Financials</button>}
+              {isAllowed('financials') && <button onClick={() => { setActiveTab('profit'); setMobileMenuOpen(false); }} className={cn('w-full text-left px-4 py-2 rounded-md', activeTab === 'profit' ? 'bg-red-700/80 text-white' : 'text-slate-700 hover:bg-slate-50')}>Profit Summary</button>}
+              {isAllowed('inventory') && <button onClick={() => { setActiveTab('inventory'); setMobileMenuOpen(false); }} className={cn('w-full text-left px-4 py-2 rounded-md', activeTab === 'inventory' ? 'bg-red-700/80 text-white' : 'text-slate-700 hover:bg-slate-50')}>Inventory</button>}
+              {user.role === 'ADMIN' && <button onClick={() => { setActiveTab('setup'); setMobileMenuOpen(false); }} className={cn('w-full text-left px-4 py-2 rounded-md', activeTab === 'setup' ? 'bg-red-700/80 text-white' : 'text-slate-700 hover:bg-slate-50')}>Setup</button>}
+            </nav>
           </div>
-        </aside>
+        </div>
+      )}
 
+      <div className="flex">
         <main className="flex-1">
           <div className="max-w-7xl mx-auto p-4 md:p-6">
         {activeTab === 'dashboard' && isAllowed('dashboard') && (
@@ -1795,15 +1772,15 @@ function DashboardTab({ data, onRefresh, onGoToInventory, userRole }: { data: an
             <span className="text-[10px] font-bold uppercase text-slate-400 bg-slate-50 px-2 py-1 rounded">Last months</span>
           </div>
 
-          <div className="w-full mb-4 flex-1" ref={chartRef} style={{ minWidth: 0, minHeight: 0 }}>
+          <div className="w-full mb-4 h-56 sm:h-72 lg:h-96" ref={chartRef} style={{ minWidth: 0, minHeight: 0 }}>
             {chartCanRender && Array.isArray(data?.monthlySales) && data.monthlySales.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.monthlySales} margin={{ top: 6, right: 8, left: -8, bottom: 4 }}>
+                <LineChart data={data.monthlySales} margin={{ top: 10, right: 8, left: -8, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `Nu. ${v}`} />
-                  <Tooltip contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 8px 12px -6px rgb(0 0 0 / 0.08)' }} />
-                  <Line type="monotone" dataKey="value" stroke="#ef4444" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
+                  <Tooltip contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 8px 12px -6px rgb(0 0 0 / 0.08)' }} formatter={(value: any) => (typeof value === 'number' ? `Nu. ${Number(value).toFixed(2)}` : value)} />
+                  <Line type="monotone" dataKey="value" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (!data?.monthlySales || data.monthlySales.length === 0) ? (
@@ -1930,8 +1907,10 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [selectedLoading, setSelectedLoading] = useState(false);
-  const [startDate, setStartDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
-  const [endDate, setEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  // Keep the date inputs blank by default (like Profit tab) but default
+  // fetch to today's transactions when filters are empty.
+  const [startDate, setStartDate] = useState<string>(() => '');
+  const [endDate, setEndDate] = useState<string>(() => '');
   const [billSearch, setBillSearch] = useState('');
   const [hasMore, setHasMore] = useState(false);
   const [startIndex, setStartIndex] = useState(0);
@@ -1997,7 +1976,10 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
     fetchController.current = new AbortController();
 
     try {
-      const params: Record<string, string> = { action: 'listBills', limit: String(limit) };
+  const params: Record<string, string> = { action: 'listBills', limit: String(limit) };
+  // If the caller didn't provide explicit start/end, default to today's date
+  // so that an empty UI date field still shows today's transactions.
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
       // When fetching pages by offset, pass `offset`. If date filters exist,
       // include `start` and `end` as date-range filters. Prefers explicit
       // offset for pagination.
@@ -2005,8 +1987,9 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
       if (opts?.billNo) {
         params.billNo = opts.billNo;
       } else {
-        if (opts?.startDate) params.start = opts.startDate;
-        if (opts?.endDate) params.end = opts.endDate;
+        // Prefer explicit filters when provided, otherwise default to today
+        params.start = opts?.startDate || startDate || todayStr;
+        params.end = opts?.endDate || endDate || todayStr;
       }
       const qs = new URLSearchParams(params).toString();
       const res = await fetch(`${WEB_APP_URL}?${qs}`, { signal: fetchController.current.signal });
@@ -2112,8 +2095,17 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
             <Save size={18} />
             EXPORT EXCEL
           </button>
-          <button onClick={() => fetchBills({ startDate, endDate })} className="p-2 hover:bg-white rounded-xl border border-slate-200 text-slate-500 transition-all">
-            <History size={20} />
+          <button
+            onClick={() => fetchBills({ startDate, endDate })}
+            disabled={loading}
+            className={cn(
+              'px-3 py-2 rounded-lg flex items-center gap-2 border transition-all',
+              loading ? 'bg-white border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            )}
+            title={loading ? 'Fetching...' : 'Refresh transactions'}
+          >
+            {loading ? <div className="w-4 h-4 border-2 border-slate-200 border-t-brand rounded-full animate-spin" /> : <History size={18} />}
+            <span className="hidden sm:inline">Fetch</span>
           </button>
         </div>
       </div>
@@ -2125,7 +2117,18 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
           <input name="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
           <label className="text-xs text-slate-500 ml-3 mr-2">End</label>
           <input name="endDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
-          <button onClick={() => fetchBills({ startDate, endDate })} className="ml-3 px-3 py-2 bg-brand text-white rounded-lg text-sm font-bold">Fetch</button>
+          <button
+            onClick={() => fetchBills({ startDate, endDate })}
+            disabled={loading}
+            className={cn(
+              'ml-3 px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2',
+              loading ? 'bg-brand/70 text-white cursor-not-allowed' : 'bg-brand text-white hover:bg-brand-hover'
+            )}
+            title={loading ? 'Fetching...' : 'Fetch transactions'}
+          >
+            {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <History size={14} />}
+            <span className="hidden sm:inline">{loading ? 'Fetching' : 'Fetch'}</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -2369,14 +2372,56 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
 function ProfitTab() {
   const [loading, setLoading] = useState(true);
   const [profit, setProfit] = useState<any>(null);
+  // store month inputs in server-friendly yyyy-MM (from native month picker). mmYYYYToServer will still accept MM/YYYY if pasted.
   const [startMonth, setStartMonth] = useState<string | null>(null);
   const [endMonth, setEndMonth] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false);
 
+  const monthDisplay = (m: string | null) => {
+    if (!m) return '';
+    // accept either server format yyyy-MM or user format MM/YYYY
+    try {
+      if (m.includes('-')) {
+        const parts = m.split('-');
+        const year = Number(parts[0]);
+        const month = Number(parts[1]) - 1;
+        return format(new Date(year, month, 1), 'MM/dd/yyyy');
+      }
+      if (m.includes('/')) {
+        const parts = m.split('/');
+        const month = Number(parts[0]) - 1;
+        const year = Number(parts[1]);
+        return format(new Date(year, month, 1), 'MM/dd/yyyy');
+      }
+      return m;
+    } catch (e) { return m; }
+  };
+
+  const mmYYYYToServer = (m: string | null) => {
+    if (!m) return null;
+    // accept MM/YYYY or M/YYYY
+    const cleaned = m.trim();
+    if (cleaned.includes('/')) {
+      const parts = cleaned.split('/').map(p => p.trim());
+      if (parts.length !== 2) return null;
+      const mm = Number(parts[0]);
+      const yyyy = Number(parts[1]);
+      if (!mm || !yyyy) return null;
+      if (mm < 1 || mm > 12) return null;
+      return `${yyyy}-${String(mm).padStart(2, '0')}`;
+    }
+    // fallback: if already in yyyy-MM
+    if (cleaned.includes('-')) return cleaned;
+    return null;
+  };
   const fetchProfit = useCallback(async (opts?: { startMonth?: string | null; endMonth?: string | null }) => {
     try {
       const params = new URLSearchParams({ action: 'getProfitData' });
-      if (opts?.startMonth) params.set('startMonth', opts.startMonth);
-      if (opts?.endMonth) params.set('endMonth', opts.endMonth);
+      // opts may be user-facing (MM/YYYY) or server-facing (yyyy-MM). Normalize to server yyyy-MM
+      const s = mmYYYYToServer(opts?.startMonth ?? startMonth);
+      const e = mmYYYYToServer(opts?.endMonth ?? endMonth);
+      if (s) params.set('startMonth', s);
+      if (e) params.set('endMonth', e);
       const res = await fetch(`${WEB_APP_URL}?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch profit data');
       const data = await res.json();
@@ -2407,18 +2452,66 @@ function ProfitTab() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-black text-slate-800 tracking-tight">Profit Summary</h2>
-        <button onClick={() => fetchProfit()} className="p-2 hover:bg-white rounded-xl border border-slate-200 text-slate-500 transition-all">
-          <History size={20} />
+        <button
+          onClick={() => fetchProfit()}
+          disabled={loading}
+          className={cn(
+            'px-3 py-2 rounded-lg flex items-center gap-2 border transition-all',
+            loading ? 'bg-white border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          )}
+          title={loading ? 'Refreshing...' : 'Refresh profit data'}
+        >
+          {loading ? <div className="w-4 h-4 border-2 border-slate-200 border-t-brand rounded-full animate-spin" /> : <History size={18} />}
+          <span className="hidden sm:inline">Refresh</span>
         </button>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
-        <div className="mb-4 flex gap-3 items-center">
-          <label className="text-sm text-slate-500">Start</label>
-          <input type="month" value={startMonth || ''} onChange={(e) => setStartMonth(e.target.value || null)} className="px-3 py-2 border rounded-lg text-sm" />
-          <label className="text-sm text-slate-500">End</label>
-          <input type="month" value={endMonth || ''} onChange={(e) => setEndMonth(e.target.value || null)} className="px-3 py-2 border rounded-lg text-sm" />
-          <button onClick={() => fetchProfit({ startMonth, endMonth })} className="px-3 py-2 rounded-lg bg-brand text-white text-sm">Apply</button>
+          <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <label className="text-sm text-slate-500">Start month</label>
+          <input
+            type="month"
+            value={startMonth || ''}
+            onChange={(e) => setStartMonth(e.target.value || null)}
+            className="px-3 py-2 border rounded-lg text-sm"
+          />
+          <label className="text-sm text-slate-500">End month</label>
+          <input
+            type="month"
+            value={endMonth || ''}
+            onChange={(e) => setEndMonth(e.target.value || null)}
+            className="px-3 py-2 border rounded-lg text-sm"
+          />
+          <button
+            onClick={async () => {
+              setApplying(true);
+              try {
+                // Validate before fetching
+                const s = mmYYYYToServer(startMonth);
+                const e = mmYYYYToServer(endMonth);
+                if ((startMonth && !s) || (endMonth && !e)) {
+                  alert('Please enter months in MM/YYYY format (e.g. 03/2026)');
+                } else {
+                  await fetchProfit({ startMonth, endMonth });
+                }
+              } finally { setApplying(false); }
+            }}
+            disabled={applying}
+            className={cn(
+              'px-3 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2',
+              applying ? 'bg-brand/70 text-white cursor-not-allowed' : 'bg-brand text-white hover:bg-brand-hover'
+            )}
+            title={applying ? 'Applying filters...' : 'Apply filters'}
+          >
+            {applying ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <History size={16} />}
+            <span className="hidden sm:inline">{applying ? 'Applying' : 'Apply'}</span>
+          </button>
+          {/* show selected range in human-readable format for consistency */}
+          {(startMonth || endMonth) && (
+            <div className="text-sm text-slate-500 ml-2">
+              {monthDisplay(startMonth) || '—'} &nbsp;—&nbsp; {monthDisplay(endMonth) || '—'}
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -2467,14 +2560,14 @@ function ProfitTrendChart({ data }: { data: Array<{ month: string; name: string;
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
       <h3 className="text-lg font-bold mb-3">Profit Trend (monthly)</h3>
-      <div style={{ width: '100%', height: 320 }}>
-        <ResponsiveContainer>
-          <LineChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip formatter={(value: any) => (typeof value === 'number' ? `Nu. ${value.toFixed(2)}` : value)} />
-            <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+      <div className="w-full h-56 sm:h-72 lg:h-96">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 10, right: 8, left: -8, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `Nu. ${v}`} />
+            <Tooltip contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 8px 12px -6px rgb(0 0 0 / 0.08)' }} formatter={(value: any) => (typeof value === 'number' ? `Nu. ${Number(value).toFixed(2)}` : value)} />
+            <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -2589,48 +2682,67 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
     e.preventDefault();
     setLoading(true);
     
-    const formData = new FormData(e.currentTarget);
-    const category = isAddingNewCategory ? formData.get('newCat') as string : formData.get('pCat') as string;
-    
-    const product = {
-      ID: '', // ID is generated by backend
-      Name: formData.get('pName') as string,
-      Category: category,
-  Unit: (formData.get('pUnit') as string) || 'Pcs',
-      Cost: parseFloat(formData.get('pCost') as string),
-      Selling: parseFloat(formData.get('pSell') as string),
-      Stock: parseFloat(formData.get('pStock') as string),
-      MinStock: parseFloat(formData.get('pMin') as string),
-      Vendor: (formData.get('pVendor') as string) || 'General'
+  const form = e.currentTarget as HTMLFormElement;
+  const formData = new FormData(form);
+    const categoryRaw = isAddingNewCategory ? (formData.get('newCat') as string) : (formData.get('pCat') as string);
+    const category = categoryRaw && categoryRaw.trim() ? categoryRaw.trim() : 'General';
+
+    const parseNum = (v: FormDataEntryValue | null, fallback = 0) => {
+      if (v === null) return fallback;
+      const n = parseFloat(String(v));
+      return isNaN(n) ? fallback : n;
     };
+
+    const product = {
+      // ID is generated by backend; pass empty string or undefined
+      ID: '',
+      Name: String(formData.get('pName') || '').trim(),
+      Category: category,
+      Unit: String(formData.get('pUnit') || 'Pcs'),
+      Cost: parseNum(formData.get('pCost'), 0),
+      Selling: parseNum(formData.get('pSell'), 0),
+      Stock: parseNum(formData.get('pStock'), 0),
+      MinStock: parseNum(formData.get('pMin'), 0),
+      Vendor: String(formData.get('pVendor') || 'General')
+    };
+
+    if (!product.Name) {
+      alert('Product name is required');
+      setLoading(false);
+      return;
+    }
 
     try {
       const res = await fetch(WEB_APP_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ action: 'saveProduct', product })
       });
-      const data = await res.json();
-      if (data.success) {
+  const data = await res.json();
+  console.debug('saveProduct response', data);
+  if (data && data.success) {
         // If user wanted to record this as a purchase, post a purchase transaction
-        const formData = new FormData(e.currentTarget as HTMLFormElement);
-        const asPurchase = !!formData.get('pAsPurchase');
-        const billNo = (formData.get('pBill') as string) || `PUR-${Date.now()}`;
-        const vendor = (formData.get('pVendor') as string) || product.Vendor || 'General';
+  const formData2 = new FormData(form);
+  const asPurchase = !!formData2.get('pAsPurchase');
+  const billNo = (formData2.get('pBill') as string) || `PUR-${Date.now()}`;
+  const vendor = (formData2.get('pVendor') as string) || product.Vendor || 'General';
         const qty = Number(product.Stock) || 0;
         const cost = Number(product.Cost) || 0;
         if (asPurchase && qty > 0) {
           try {
-            await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'postPurchase', billNo, supplier: vendor, items: [{ itemId: data.id || product.ID, itemName: product.Name, qty, cost }], user: currentUser }) });
+            await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'postPurchase', billNo, supplier: vendor, items: [{ itemId: data.id || product.ID, itemName: product.Name, qty, cost }], user: currentUser }) });
           } catch (err) {
             console.error('Failed to post purchase for new product', err);
           }
         }
 
-        setShowAddModal(false);
-        setIsAddingNewCategory(false);
-        onRefresh();
-        fetchCategories();
+  setShowAddModal(false);
+  setIsAddingNewCategory(false);
+  try { await onRefresh(); } catch (e) { console.error('onRefresh failed', e); }
+  fetchCategories();
+      } else {
+        console.error('saveProduct failed', data);
+        alert('Failed to save product: ' + (data && data.error ? data.error : 'Unknown error'));
       }
     } catch (err) {
       console.error(err);
@@ -3071,7 +3183,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                 if (editAction === 'restock' && restockAmount > 0) {
                   // Save product metadata but do not override Stock (let postPurchase update stock)
                   const saveProd = { ...product, Stock: editProduct.Stock };
-                  const resSave = await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'saveProduct', product: saveProd }) });
+                  const resSave = await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'saveProduct', product: saveProd }) });
                   const saved = await resSave.json();
                   if (!saved.success) {
                     console.error('Failed to save product metadata before purchase', saved);
@@ -3080,23 +3192,23 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                   const billNo = (formData.get('eBill') as string) || `PUR-${Date.now()}`;
                   const supplier = vendor || 'General';
                   const items = [{ itemId: editProduct.ID, itemName: product.Name, qty: restockAmount, cost }];
-                  const res = await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'postPurchase', billNo, supplier, items, user: currentUser }) });
+                  const res = await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'postPurchase', billNo, supplier, items, user: currentUser }) });
                   const data = await res.json();
                   if (data && data.success) {
                     setShowEditModal(false);
                     setEditProduct(null);
-                    onRefresh();
+                    try { await onRefresh(); } catch (e) { console.error('onRefresh failed', e); }
                   } else {
                     console.error('Failed to post purchase', data);
                   }
                 } else {
                   // Normal update: save product including new stock value
-                  const res = await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'saveProduct', product }) });
+                  const res = await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'saveProduct', product }) });
                   const data = await res.json();
                   if (data.success) {
                     setShowEditModal(false);
                     setEditProduct(null);
-                    onRefresh();
+                    try { await onRefresh(); } catch (e) { console.error('onRefresh failed', e); }
                   } else {
                     console.error('Failed to save product', data);
                   }
@@ -3197,14 +3309,14 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
           style={{
             width: '10.5cm',
             height: '7cm',
-            padding: '0.3cm',
+            padding: '0cm',
             boxSizing: 'border-box',
             display: 'flex',
             gap: '0.4cm',
             alignItems: 'center',
             justifyContent: labelsPerSheet === 1 ? 'center' : 'space-between',
-            background: 'white',
-            color: 'black'
+            background: '#fff',
+            color: '#000'
           }}
         >
           {barcodeToPrint && (() => {
