@@ -1774,15 +1774,49 @@ function DashboardTab({ data, onRefresh, onGoToInventory, userRole }: { data: an
 
           <div className="w-full mb-4 h-56 sm:h-72 lg:h-96" ref={chartRef} style={{ minWidth: 0, minHeight: 0 }}>
             {chartCanRender && Array.isArray(data?.monthlySales) && data.monthlySales.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.monthlySales} margin={{ top: 10, right: 8, left: -8, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `Nu. ${v}`} />
-                  <Tooltip contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 8px 12px -6px rgb(0 0 0 / 0.08)' }} formatter={(value: any) => (typeof value === 'number' ? `Nu. ${Number(value).toFixed(2)}` : value)} />
-                  <Line type="monotone" dataKey="value" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
-                </LineChart>
-              </ResponsiveContainer>
+              (() => {
+                const sales = Array.isArray(data.monthlySales) ? data.monthlySales : [];
+                // Determine the year to display on the X-axis. If the data contains a year token (e.g. "Mar 2026"), use that year.
+                let year = new Date().getFullYear();
+                if (sales.length > 0 && typeof sales[0].name === 'string') {
+                  const m = String(sales[0].name).trim().match(/(\d{4})$/);
+                  if (m && m[1]) year = Number(m[1]);
+                }
+
+                // Build a full 12-month series for the chosen year. For months with no sales data, value will be null
+                // so Recharts will leave gaps (no connecting line) instead of plotting zeros.
+                const months = Array.from({ length: 12 }).map((_, i) => ({
+                  name: format(new Date(year, i, 1), 'MMM yyyy'),
+                  monthIndex: i
+                }));
+
+                const fullData = months.map(m => {
+                  const found = sales.find((s: any) => String(s.name) === m.name);
+                  return { name: m.name, value: found ? Number(found.value) : null };
+                });
+
+                return (
+                  <ResponsiveContainer width="100%" height="100%">
+                    {/* Show all 12 months on the X-axis; null values create gaps (no connecting lines) */}
+                    {/* Increase right margin and right padding so the last tick label (Dec) is fully visible */}
+                    <LineChart data={fullData} margin={{ top: 10, right: 40, left: 0, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis
+                        dataKey="name"
+                        type="category"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#94a3b8', fontSize: 11 }}
+                        interval={0}
+                        padding={{ left: 0, right: 12 }}
+                      />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `Nu. ${v}`} />
+                      <Tooltip contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 8px 12px -6px rgb(0 0 0 / 0.08)' }} formatter={(value: any) => (typeof value === 'number' ? `Nu. ${Number(value).toFixed(2)}` : value)} />
+                      <Line connectNulls={false} type="monotone" dataKey="value" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                );
+              })()
             ) : (!data?.monthlySales || data.monthlySales.length === 0) ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-400">
                 <TrendingUp size={48} className="opacity-10 mb-2" />
@@ -2372,6 +2406,8 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
 function ProfitTab() {
   const [loading, setLoading] = useState(true);
   const [profit, setProfit] = useState<any>(null);
+  const fetchControllerRef = useRef<AbortController | null>(null);
+  const [chartLoading, setChartLoading] = useState(false);
   // store month inputs in server-friendly yyyy-MM (from native month picker). mmYYYYToServer will still accept MM/YYYY if pasted.
   const [startMonth, setStartMonth] = useState<string | null>(null);
   const [endMonth, setEndMonth] = useState<string | null>(null);
@@ -2415,22 +2451,38 @@ function ProfitTab() {
     return null;
   };
   const fetchProfit = useCallback(async (opts?: { startMonth?: string | null; endMonth?: string | null }) => {
+    // Abort previous fetch if in-flight
     try {
+      if (fetchControllerRef.current) {
+        try { fetchControllerRef.current.abort(); } catch (e) { /* ignore */ }
+      }
+      const controller = new AbortController();
+      fetchControllerRef.current = controller;
+      setChartLoading(true);
+      setProfit(null);
+
       const params = new URLSearchParams({ action: 'getProfitData' });
       // opts may be user-facing (MM/YYYY) or server-facing (yyyy-MM). Normalize to server yyyy-MM
       const s = mmYYYYToServer(opts?.startMonth ?? startMonth);
       const e = mmYYYYToServer(opts?.endMonth ?? endMonth);
       if (s) params.set('startMonth', s);
       if (e) params.set('endMonth', e);
-      const res = await fetch(`${WEB_APP_URL}?${params.toString()}`);
+      const res = await fetch(`${WEB_APP_URL}?${params.toString()}`, { signal: controller.signal });
       if (!res.ok) throw new Error('Failed to fetch profit data');
       const data = await res.json();
       setProfit(data);
-    } catch (err) {
+    } catch (err: any) {
+      if (err && err.name === 'AbortError') {
+        // fetch was aborted; no action
+        return;
+      }
       console.error('fetchProfit error', err);
       setProfit(null);
+    } finally {
+      setChartLoading(false);
+      fetchControllerRef.current = null;
     }
-  }, []);
+  }, [startMonth, endMonth]);
 
   useEffect(() => {
     let mounted = true;
@@ -2439,7 +2491,7 @@ function ProfitTab() {
       await fetchProfit({ startMonth, endMonth });
       if (mounted) setLoading(false);
     })();
-    return () => { mounted = false; };
+    return () => { mounted = false; if (fetchControllerRef.current) { try { fetchControllerRef.current.abort(); } catch(e){} } };
   }, [fetchProfit]);
 
   // compute profit based solely on revenue and cogs
@@ -2539,7 +2591,7 @@ function ProfitTab() {
       </div>
       {!loading && (
         <div>
-          <ProfitTrendChart data={profit?.monthlyProfit} />
+          <ProfitTrendChart data={profit?.monthlyProfit} loading={chartLoading} />
         </div>
       )}
     </div>
@@ -2550,24 +2602,51 @@ function ProfitTab() {
  * PROFIT TREND CHART
  * Render a monthly profit line chart below the summary cards with hover markers
  */
-function ProfitTrendChart({ data }: { data: Array<{ month: string; name: string; profit: number }> | undefined }) {
+function ProfitTrendChart({ data, loading }: { data: Array<{ month: string; name: string; profit: number }> | undefined, loading?: boolean }) {
+  // Show a lightweight skeleton while loading
+  if (loading) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+        <h3 className="text-lg font-bold mb-3">Profit Trend (monthly)</h3>
+        <div className="w-full h-56 sm:h-72 lg:h-96 flex items-center justify-center">
+          <div className="w-10 h-10 border-4 border-slate-100 border-t-brand rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
   if (!Array.isArray(data) || data.length === 0) {
     return (
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 text-center text-sm text-slate-500">No profit data available for the selected period.</div>
     );
   }
 
+  // Memoize full-year construction to avoid re-computation on every render when data hasn't changed
+  const fullData = React.useMemo(() => {
+    const sales = Array.isArray(data) ? data : [];
+    let year = new Date().getFullYear();
+    if (sales.length > 0 && typeof sales[0].name === 'string') {
+      const m = String(sales[0].name).trim().match(/(\d{4})$/);
+      if (m && m[1]) year = Number(m[1]);
+    }
+    const months = Array.from({ length: 12 }).map((_, i) => ({ name: format(new Date(year, i, 1), 'MMM yyyy'), monthIndex: i }));
+    return months.map(m => {
+      const found = sales.find((s: any) => String(s.name) === m.name);
+      return { name: m.name, profit: found ? Number(found.profit) : null };
+    });
+  }, [data]);
+
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
       <h3 className="text-lg font-bold mb-3">Profit Trend (monthly)</h3>
       <div className="w-full h-56 sm:h-72 lg:h-96">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 10, right: 8, left: -8, bottom: 4 }}>
+          <LineChart data={fullData} margin={{ top: 10, right: 40, left: 0, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+            <XAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} interval={0} padding={{ left: 0, right: 12 }} />
             <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `Nu. ${v}`} />
             <Tooltip contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 8px 12px -6px rgb(0 0 0 / 0.08)' }} formatter={(value: any) => (typeof value === 'number' ? `Nu. ${Number(value).toFixed(2)}` : value)} />
-            <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
+            <Line connectNulls={false} type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
