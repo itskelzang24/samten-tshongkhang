@@ -90,9 +90,7 @@ interface Bill {
   BillNo: string;
   DateTime: string;
   CustomerName: string;
-  CustomerContact?: string;
   Method: string;
-  TransferId?: string;
   User: string;
   Subtotal: number;
   GSTTotal: number;
@@ -382,6 +380,17 @@ export default function App() {
     return () => { mounted = false; };
   }, [user, prefetchFinancials]);
 
+  // Auto-focus the barcode/search input whenever the POS tab is opened so
+  // users can scan or type immediately without clicking the scanner button.
+  useEffect(() => {
+    if (activeTab !== 'pos') return;
+    const t = window.setTimeout(() => {
+      barcodeInputRef.current?.focus();
+      barcodeInputRef.current?.select();
+    }, 50);
+    return () => window.clearTimeout(t);
+  }, [activeTab, isEditing]);
+
   const addToCart = useCallback((product: Product) => {
     if (loading) return; // prevent adding while save/update in progress
     setCart(prev => {
@@ -393,6 +402,9 @@ export default function App() {
     });
     setSearchQuery('');
     setShowSuggestions(false);
+    window.setTimeout(() => {
+      barcodeInputRef.current?.focus();
+    }, 0);
   }, [config?.gst_rate, loading]);
 
   const updateCartQty = useCallback((id: string | number, qty: number, lineType: 'SALE' | 'RETURN') => {
@@ -526,40 +538,45 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [cart, customerName, customerContact, paymentMethod, transferId, currentUser, isEditing, returnToTab, fetchProducts, fetchDashboardData]);
+  }, [cart, customerName, paymentMethod, currentUser, isEditing, returnToTab, fetchProducts, fetchDashboardData]);
 
   const resetPOS = useCallback(() => {
     setCart([]);
     setCustomerName('Walk-in Customer');
-    setCustomerContact('');
     setPaymentMethod('CASH');
-    setTransferId('');
+    setSearchQuery('');
     setIsEditing(null);
     if (returnToTab) {
       setActiveTab(returnToTab);
       setReturnToTab(null);
+    } else {
+      window.setTimeout(() => {
+        barcodeInputRef.current?.focus();
+      }, 0);
     }
   }, [returnToTab]);
-
-
-  useEffect(() => {
-    if (paymentMethod === 'CASH' && transferId) {
-      setTransferId('');
-    }
-  }, [paymentMethod, transferId]);
 
   const handleBarcodeSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     const barcode = searchQuery.trim();
-    if (!barcode) return;
+    if (!barcode) {
+      barcodeInputRef.current?.focus();
+      return;
+    }
 
     const product = products.find(p => p.ID.toString() === barcode);
     if (product) {
       addToCart(product);
       setSearchQuery('');
+      setShowSuggestions(false);
     } else {
       setShowSuggestions(true);
     }
+
+    window.setTimeout(() => {
+      barcodeInputRef.current?.focus();
+      barcodeInputRef.current?.select();
+    }, 0);
   }, [searchQuery, products, addToCart]);
 
   const editExistingBill = useCallback(async (billNo: string) => {
@@ -589,9 +606,7 @@ export default function App() {
         setActiveTab('pos');
         setIsEditing(actualBillNo);
         setCustomerName(bill.CustomerName || 'Walk-in Customer');
-        setCustomerContact(bill.CustomerContact || '');
         setPaymentMethod(bill.Method || 'CASH');
-        setTransferId(bill.TransferId || '');
         setCart((bill.lines || []).map((l: any) => ({
           ID: l.ItemID,
           Name: l.ItemName,
@@ -628,11 +643,11 @@ export default function App() {
     ).slice(0, 10);
   }, [searchQuery, products]);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = () => {
     setUser(null);
     try { localStorage.removeItem('samten_user'); } catch (e) { /* ignore */ }
     setActiveTab('dashboard');
-  }, []);
+  };
 
   // keep persisted user in sync with state so refresh retains login
   useEffect(() => {
@@ -864,6 +879,7 @@ export default function App() {
                   </div>
                   <input
                     ref={barcodeInputRef}
+                    autoFocus={activeTab === 'pos'}
                     name="productSearch"
                     type="text"
                     placeholder="Scan barcode or search products (ID, Name, Category)..."
@@ -881,7 +897,7 @@ export default function App() {
                     className="absolute inset-y-2 right-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl flex items-center gap-2 text-sm font-medium transition-colors"
                   >
                     <Barcode size={18} />
-                    <span className="hidden sm:inline">Tap to Scan</span>
+                    <span className="hidden sm:inline">Focus Scanner</span>
                   </button>
                 </form>
 
@@ -1363,7 +1379,7 @@ export default function App() {
                   </td>
                   <td className="py-1 text-center">{line.Qty}</td>
                   <td className="py-1 text-right">
-                    {line.LineType === 'RETURN' && '-'}Nu. {Number(line.LineTotal || 0).toFixed(2)}
+                    {line.LineType === 'RETURN' && '-'}Nu. {line.LineTotal.toFixed(2)}
                   </td>
                 </tr>
               ))}
@@ -1421,6 +1437,8 @@ function LoginScreen({ onLogin, fetchConfig, prefetchFinancials }: { onLogin: (u
     setLoading(true);
     setError('');
 
+    // Simulate network delay for a better feel
+    await new Promise(resolve => setTimeout(resolve, 800));
 
     if (username === 'admin' && password === 'Admin@123$') {
       const u: UserProfile = { username: 'Admin', role: 'ADMIN' };
@@ -2166,32 +2184,15 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
 
   const getBillNo = (bill: any) => bill?.BillNo || bill?.['Bill No'] || bill?.billNo || 'N/A';
 
-  const normalizeBillNumbers = (bill: any) => ({
-    ...bill,
-    Subtotal: Number(bill?.Subtotal ?? 0),
-    GSTTotal: Number(bill?.GSTTotal ?? 0),
-    GrandTotal: Number(bill?.GrandTotal ?? 0),
-    lines: Array.isArray(bill?.lines)
-      ? bill.lines.map((line: any) => ({
-          ...line,
-          Qty: Number(line?.Qty ?? 0),
-          Rate: Number(line?.Rate ?? 0),
-          GST_Rate: Number(line?.GST_Rate ?? 0),
-          GST_Amount: Number(line?.GST_Amount ?? 0),
-          LineTotal: Number(line?.LineTotal ?? 0),
-        }))
-      : bill?.lines,
-  });
-
   const handleSelectBill = async (bill: Bill) => {
-    setSelectedBill(normalizeBillNumbers(bill));
+    setSelectedBill(bill);
     setSelectedLoading(true);
     const billNo = getBillNo(bill);
     try {
       const res = await fetch(`${WEB_APP_URL}?action=getBill&billNo=${billNo}`);
       const fullBill = await res.json();
       if (fullBill && getBillNo(fullBill) === billNo) {
-        setSelectedBill(normalizeBillNumbers(fullBill));
+        setSelectedBill(fullBill);
       }
     } catch (err) {
       console.error(err);
@@ -2458,7 +2459,7 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
                             <span className="font-bold text-slate-400">{line.Qty}x</span>
                             <span className="text-slate-700">{line.ItemName}</span>
                           </div>
-                          <span className="font-bold">Nu. {Number(line.LineTotal || 0).toFixed(2)}</span>
+                          <span className="font-bold">Nu. {line.LineTotal.toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
@@ -2472,15 +2473,15 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
                 <div className="pt-4 space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">Subtotal</span>
-                    <span className="font-bold">Nu. {Number(selectedBill.Subtotal || 0).toFixed(2)}</span>
+                    <span className="font-bold">Nu. {selectedBill.Subtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">GST Total</span>
-                    <span className="font-bold">Nu. {Number(selectedBill.GSTTotal || 0).toFixed(2)}</span>
+                    <span className="font-bold">Nu. {selectedBill.GSTTotal.toFixed(2)}</span>
                   </div>
                   <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
                     <span className="text-sm font-bold text-slate-800">Grand Total</span>
-                    <span className="text-xl font-black text-brand">Nu. {Number(selectedBill.GrandTotal || 0).toFixed(2)}</span>
+                    <span className="text-xl font-black text-brand">Nu. {selectedBill.GrandTotal.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
