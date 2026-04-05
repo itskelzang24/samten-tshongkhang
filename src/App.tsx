@@ -15,6 +15,7 @@ import {
   ChevronRight, 
   AlertCircle,
   Barcode,
+  Phone,
   ArrowLeftRight,
   User,
   CreditCard,
@@ -89,7 +90,9 @@ interface Bill {
   BillNo: string;
   DateTime: string;
   CustomerName: string;
+  CustomerContact?: string;
   Method: string;
+  TransferId?: string;
   User: string;
   Subtotal: number;
   GSTTotal: number;
@@ -243,6 +246,8 @@ export default function App() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState('Walk-in Customer');
   const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [customerContact, setCustomerContact] = useState('');
+  const [transferId, setTransferId] = useState('');
   const [currentUser] = useState('Admin');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -446,7 +451,9 @@ export default function App() {
         action: 'saveBill',
         billNo,
         customerName,
+        customerContact: customerContact || undefined,
         method: paymentMethod,
+        transferId: transferId || undefined,
         user: currentUser,
         lines: cart.map(item => ({
           itemId: item.ID,
@@ -472,6 +479,8 @@ export default function App() {
           BillNo: billNo!,
           DateTime: new Date().toISOString(),
           CustomerName: customerName,
+          CustomerContact: customerContact,
+          TransferId: transferId,
           Method: paymentMethod,
           User: currentUser,
           Subtotal: subtotal,
@@ -517,18 +526,27 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [cart, customerName, paymentMethod, currentUser, isEditing, returnToTab, fetchProducts, fetchDashboardData]);
+  }, [cart, customerName, customerContact, paymentMethod, transferId, currentUser, isEditing, returnToTab, fetchProducts, fetchDashboardData]);
 
   const resetPOS = useCallback(() => {
     setCart([]);
     setCustomerName('Walk-in Customer');
+    setCustomerContact('');
     setPaymentMethod('CASH');
+    setTransferId('');
     setIsEditing(null);
     if (returnToTab) {
       setActiveTab(returnToTab);
       setReturnToTab(null);
     }
   }, [returnToTab]);
+
+
+  useEffect(() => {
+    if (paymentMethod === 'CASH' && transferId) {
+      setTransferId('');
+    }
+  }, [paymentMethod, transferId]);
 
   const handleBarcodeSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -571,7 +589,9 @@ export default function App() {
         setActiveTab('pos');
         setIsEditing(actualBillNo);
         setCustomerName(bill.CustomerName || 'Walk-in Customer');
+        setCustomerContact(bill.CustomerContact || '');
         setPaymentMethod(bill.Method || 'CASH');
+        setTransferId(bill.TransferId || '');
         setCart((bill.lines || []).map((l: any) => ({
           ID: l.ItemID,
           Name: l.ItemName,
@@ -608,11 +628,11 @@ export default function App() {
     ).slice(0, 10);
   }, [searchQuery, products]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     setUser(null);
     try { localStorage.removeItem('samten_user'); } catch (e) { /* ignore */ }
     setActiveTab('dashboard');
-  };
+  }, []);
 
   // keep persisted user in sync with state so refresh retains login
   useEffect(() => {
@@ -1088,6 +1108,23 @@ export default function App() {
                     </div>
 
                     <div className="space-y-1.5">
+                      <label htmlFor="customerContact" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Customer Contact</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
+                          <Phone size={16} />
+                        </div>
+                        <input
+                          id="customerContact"
+                          type="text"
+                          placeholder="Phone or email (optional)"
+                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium"
+                          value={customerContact}
+                          onChange={(e) => setCustomerContact(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Payment Method</label>
                       <div className="grid grid-cols-2 gap-2">
                         <button
@@ -1116,6 +1153,21 @@ export default function App() {
                         </button>
                       </div>
                     </div>
+
+                    {/* Transfer / transaction ID for non-cash payments */}
+                    {paymentMethod !== 'CASH' && (
+                      <div className="space-y-1.5">
+                        <label htmlFor="transferId" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Transaction ID</label>
+                        <input
+                          id="transferId"
+                          type="text"
+                          placeholder="Bank transfer / transaction ID"
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium"
+                          value={transferId}
+                          onChange={(e) => setTransferId(e.target.value)}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="h-px bg-slate-100" />
@@ -1229,6 +1281,8 @@ export default function App() {
                   <h4 className="text-2xl font-black text-slate-900">Nu. {lastBill.GrandTotal.toFixed(2)}</h4>
                   <p className="text-sm text-slate-500 font-medium">Bill No: <span className="text-slate-800 font-bold">{lastBill.BillNo}</span></p>
                   <p className="text-xs text-slate-400">{format(new Date(lastBill.DateTime), 'PPpp')}</p>
+                  {lastBill.CustomerContact && <p className="text-xs text-slate-400">Contact: <span className="text-slate-800">{lastBill.CustomerContact}</span></p>}
+                  {lastBill.TransferId && <p className="text-xs text-slate-400">Txn ID: <span className="text-slate-800">{lastBill.TransferId}</span></p>}
                 </div>
 
                 <div className="mt-8 space-y-3">
@@ -1271,12 +1325,24 @@ export default function App() {
             </div>
             <div className="flex justify-between">
               <span>Customer:</span>
-              <span>{lastBill?.CustomerName}</span>
+                <span>{lastBill?.CustomerName}</span>
             </div>
             <div className="flex justify-between">
               <span>User:</span>
               <span>{lastBill?.User}</span>
             </div>
+              {lastBill?.CustomerContact && (
+                <div className="flex justify-between">
+                  <span>Contact:</span>
+                  <span>{lastBill?.CustomerContact}</span>
+                </div>
+              )}
+              {lastBill?.TransferId && (
+                <div className="flex justify-between">
+                  <span>Txn ID:</span>
+                  <span>{lastBill?.TransferId}</span>
+                </div>
+              )}
           </div>
 
           <table className="w-full mb-4">
@@ -1297,7 +1363,7 @@ export default function App() {
                   </td>
                   <td className="py-1 text-center">{line.Qty}</td>
                   <td className="py-1 text-right">
-                    {line.LineType === 'RETURN' && '-'}Nu. {line.LineTotal.toFixed(2)}
+                    {line.LineType === 'RETURN' && '-'}Nu. {Number(line.LineTotal || 0).toFixed(2)}
                   </td>
                 </tr>
               ))}
@@ -1355,8 +1421,6 @@ function LoginScreen({ onLogin, fetchConfig, prefetchFinancials }: { onLogin: (u
     setLoading(true);
     setError('');
 
-    // Simulate network delay for a better feel
-    await new Promise(resolve => setTimeout(resolve, 800));
 
     if (username === 'admin' && password === 'Admin@123$') {
       const u: UserProfile = { username: 'Admin', role: 'ADMIN' };
@@ -1395,13 +1459,14 @@ function LoginScreen({ onLogin, fetchConfig, prefetchFinancials }: { onLogin: (u
           )}
           
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Username</label>
+            <label htmlFor="loginUsername" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Username</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
                 <User size={18} />
               </div>
               <input 
                 required
+                id="loginUsername"
                 name="username"
                 type="text" 
                 className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all font-medium"
@@ -1413,13 +1478,14 @@ function LoginScreen({ onLogin, fetchConfig, prefetchFinancials }: { onLogin: (u
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Password</label>
+            <label htmlFor="loginPassword" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Password</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
                 <ShieldCheck size={18} />
               </div>
               <input 
                 required
+                id="loginPassword"
                 name="password"
                 type={showPassword ? 'text' : 'password'}
                 className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all font-medium"
@@ -2100,15 +2166,32 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
 
   const getBillNo = (bill: any) => bill?.BillNo || bill?.['Bill No'] || bill?.billNo || 'N/A';
 
+  const normalizeBillNumbers = (bill: any) => ({
+    ...bill,
+    Subtotal: Number(bill?.Subtotal ?? 0),
+    GSTTotal: Number(bill?.GSTTotal ?? 0),
+    GrandTotal: Number(bill?.GrandTotal ?? 0),
+    lines: Array.isArray(bill?.lines)
+      ? bill.lines.map((line: any) => ({
+          ...line,
+          Qty: Number(line?.Qty ?? 0),
+          Rate: Number(line?.Rate ?? 0),
+          GST_Rate: Number(line?.GST_Rate ?? 0),
+          GST_Amount: Number(line?.GST_Amount ?? 0),
+          LineTotal: Number(line?.LineTotal ?? 0),
+        }))
+      : bill?.lines,
+  });
+
   const handleSelectBill = async (bill: Bill) => {
-    setSelectedBill(bill);
+    setSelectedBill(normalizeBillNumbers(bill));
     setSelectedLoading(true);
     const billNo = getBillNo(bill);
     try {
       const res = await fetch(`${WEB_APP_URL}?action=getBill&billNo=${billNo}`);
       const fullBill = await res.json();
       if (fullBill && getBillNo(fullBill) === billNo) {
-        setSelectedBill(fullBill);
+        setSelectedBill(normalizeBillNumbers(fullBill));
       }
     } catch (err) {
       console.error(err);
@@ -2146,11 +2229,11 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
 
       {/* Filters: date range and bill number search */}
       <div className="mt-4 mb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-slate-500 mr-2">Start</label>
-          <input name="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
-          <label className="text-xs text-slate-500 ml-3 mr-2">End</label>
-          <input name="endDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+          <div className="flex items-center gap-2">
+          <label htmlFor="filterStartDate" className="text-xs text-slate-500 mr-2">Start</label>
+          <input id="filterStartDate" name="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+          <label htmlFor="filterEndDate" className="text-xs text-slate-500 ml-3 mr-2">End</label>
+          <input id="filterEndDate" name="endDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
           <button
             onClick={() => fetchBills({ startDate, endDate })}
             disabled={loading}
@@ -2344,6 +2427,20 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
                     <p className="text-sm font-bold text-slate-800">{format(new Date(selectedBill.DateTime), 'PP')}</p>
                   </div>
                 </div>
+                
+                {/* Contact & Transfer ID (if present) */}
+                {(selectedBill.CustomerContact || selectedBill.TransferId) && (
+                  <div className="mt-3 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase text-slate-500">Contact</p>
+                      <p className="text-sm font-bold text-slate-800">{selectedBill.CustomerContact || '-'}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold uppercase text-slate-500">Transaction ID</p>
+                      <p className="text-sm font-bold text-slate-800">{selectedBill.TransferId || '-'}</p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="h-px bg-slate-100" />
 
@@ -2361,7 +2458,7 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
                             <span className="font-bold text-slate-400">{line.Qty}x</span>
                             <span className="text-slate-700">{line.ItemName}</span>
                           </div>
-                          <span className="font-bold">Nu. {line.LineTotal.toFixed(2)}</span>
+                          <span className="font-bold">Nu. {Number(line.LineTotal || 0).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
@@ -2375,15 +2472,15 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
                 <div className="pt-4 space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">Subtotal</span>
-                    <span className="font-bold">Nu. {selectedBill.Subtotal.toFixed(2)}</span>
+                    <span className="font-bold">Nu. {Number(selectedBill.Subtotal || 0).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">GST Total</span>
-                    <span className="font-bold">Nu. {selectedBill.GSTTotal.toFixed(2)}</span>
+                    <span className="font-bold">Nu. {Number(selectedBill.GSTTotal || 0).toFixed(2)}</span>
                   </div>
                   <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
                     <span className="text-sm font-bold text-slate-800">Grand Total</span>
-                    <span className="text-xl font-black text-brand">Nu. {selectedBill.GrandTotal.toFixed(2)}</span>
+                    <span className="text-xl font-black text-brand">Nu. {Number(selectedBill.GrandTotal || 0).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -2520,15 +2617,17 @@ function ProfitTab() {
 
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
           <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
-          <label className="text-sm text-slate-500">Start month</label>
+          <label htmlFor="profitStartMonth" className="text-sm text-slate-500">Start month</label>
           <input
+            id="profitStartMonth"
             type="month"
             value={startMonth || ''}
             onChange={(e) => setStartMonth(e.target.value || null)}
             className="px-3 py-2 border rounded-lg text-sm"
           />
-          <label className="text-sm text-slate-500">End month</label>
+          <label htmlFor="profitEndMonth" className="text-sm text-slate-500">End month</label>
           <input
+            id="profitEndMonth"
             type="month"
             value={endMonth || ''}
             onChange={(e) => setEndMonth(e.target.value || null)}
