@@ -262,6 +262,7 @@ function canonicalFieldMap() {
     itemname: 'ItemName',
     qty: 'Qty',
     rate: 'Rate',
+    unitcost: 'UnitCost',
     linetype: 'LineType',
     gstrate: 'GST_Rate',
     gstamount: 'GST_Amount',
@@ -327,6 +328,7 @@ function normalizeLineObjectFromRow(row, index) {
     ItemName: getField(row, index, 'ItemName', 4),
     Qty: toNumberSafe(getField(row, index, 'Qty', 5)),
     Rate: toNumberSafe(getField(row, index, 'Rate', 6)),
+    UnitCost: toNumberSafe(getField(row, index, 'UnitCost', index && index.LineType !== undefined ? '' : 7)),
     LineType: getField(row, index, 'LineType', 7),
     GST_Rate: toNumberSafe(getField(row, index, 'GST_Rate', 8)),
     GST_Amount: toNumberSafe(getField(row, index, 'GST_Amount', 9)),
@@ -589,6 +591,86 @@ function addCategory(body) {
    BILLS / SALES
 ========================= */
 
+
+function ensureSalesLineHeaders() {
+  const sheet = getSheet(SHEET_NAMES.SALES_LINES);
+  if (!sheet) return { error: 'Sales_Lines sheet not found' };
+
+  const canonical = ['BillNo','LineId','DateTime','ItemID','ItemName','Qty','Rate','UnitCost','LineType','GST_Rate','GST_Amount','LineTotal','User','Status','UpdatedAt'];
+  const lastCol = sheet.getLastColumn();
+  const existing = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+  const existingNorm = {};
+  existing.forEach(function (h) {
+    if (h !== '' && h !== null && h !== undefined) existingNorm[normalizeKey(h)] = true;
+  });
+
+  const missing = canonical.filter(function (h) {
+    return !existingNorm[normalizeKey(h)];
+  });
+
+  if (!existing.length || (existing.length === 1 && String(existing[0]) === '')) {
+    sheet.getRange(1, 1, 1, canonical.length).setValues([canonical]);
+    clearExecutionCache(SHEET_NAMES.SALES_LINES);
+    return { success: true, headers: canonical, message: 'Canonical Sales_Lines headers inserted' };
+  }
+
+  if (!missing.length) {
+    return { success: true, headers: existing, message: 'Sales_Lines headers already present' };
+  }
+
+  const newHeaders = existing.slice();
+  missing.forEach(function (h) { newHeaders.push(h); });
+  sheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]);
+  clearExecutionCache(SHEET_NAMES.SALES_LINES);
+  return { success: true, headers: newHeaders, appended: missing };
+}
+
+function getProductCostMap_() {
+  const values = getSheetValues(SHEET_NAMES.PRODUCTS);
+  if (!values.length || values.length < 2) return {};
+  const idx = buildHeaderIndex(values[0]);
+  const map = {};
+  for (let i = 1; i < values.length; i++) {
+    const id = String(getField(values[i], idx, 'ID', 0) || '');
+    if (!id) continue;
+    map[id] = toNumberSafe(getField(values[i], idx, 'Cost', 4));
+  }
+  return map;
+}
+
+function ensurePurchaseHeaders() {
+  const sheet = getSheet(SHEET_NAMES.PURCHASES);
+  if (!sheet) return { error: 'Purchase_Transactions sheet not found' };
+
+  const canonical = ['DateTime','BillNo','Supplier','ItemID','ItemName','Qty','Cost','Total','User','Status','UpdatedAt'];
+  const lastCol = sheet.getLastColumn();
+  const existing = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+  const existingNorm = {};
+  existing.forEach(function (h) {
+    if (h !== '' && h !== null && h !== undefined) existingNorm[normalizeKey(h)] = true;
+  });
+
+  const missing = canonical.filter(function (h) {
+    return !existingNorm[normalizeKey(h)];
+  });
+
+  if (!existing.length || (existing.length === 1 && String(existing[0]) === '')) {
+    sheet.getRange(1, 1, 1, canonical.length).setValues([canonical]);
+    clearExecutionCache(SHEET_NAMES.PURCHASES);
+    return { success: true, headers: canonical, message: 'Canonical purchase headers inserted' };
+  }
+
+  if (!missing.length) {
+    return { success: true, headers: existing, message: 'Purchase headers already present' };
+  }
+
+  const newHeaders = existing.slice();
+  missing.forEach(function (h) { newHeaders.push(h); });
+  sheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]);
+  clearExecutionCache(SHEET_NAMES.PURCHASES);
+  return { success: true, headers: newHeaders, appended: missing };
+}
+
 function ensureBillHeaders() {
   const sheet = getSheet(SHEET_NAMES.SALES_BILLS);
   if (!sheet) return { error: 'Sales_Bills sheet not found' };
@@ -757,6 +839,7 @@ function getBill(billNo) {
 
 function saveBill(body) {
   ensureBillHeaders();
+  ensureSalesLineHeaders();
 
   const billNo = body.billNo || body.BillNo;
   const customerName = body.customerName || body.CustomerName || '';
@@ -765,6 +848,7 @@ function saveBill(body) {
   const lines = body.lines || body.Lines || [];
   const customerContact = body.customerContact !== undefined ? body.customerContact : (body.CustomerContact !== undefined ? body.CustomerContact : '');
   const transferId = body.transferId !== undefined ? body.transferId : (body.TransferId !== undefined ? body.TransferId : '');
+  const productCostMap = getProductCostMap_();
   const now = new Date();
 
   if (!billNo) return { success: false, error: 'billNo required' };
@@ -809,9 +893,10 @@ function saveBill(body) {
     subtotal += sign * lineTotal;
     gstTotal += sign * gstAmount;
 
+    const unitCost = toNumberSafe(productCostMap[String(line.itemId)] || 0);
     const lineId = Utilities.getUuid();
     lineRows.push([
-      billNo, lineId, now, line.itemId, line.itemName, qty, rate, line.lineType,
+      billNo, lineId, now, line.itemId, line.itemName, qty, rate, unitCost, line.lineType,
       gstRate, gstAmount, lineTotal, user, 'ACTIVE', now
     ]);
 
@@ -974,6 +1059,7 @@ function updateProductStock(itemId, qtyChange, user, refType, refNo, refLineId, 
 }
 
 function postPurchase(body) {
+  ensurePurchaseHeaders();
   const billNo = body.billNo;
   const supplier = body.supplier;
   const items = body.items || [];
@@ -1135,19 +1221,30 @@ function getProfitData(params) {
   const productValues = getSheetValues(SHEET_NAMES.PRODUCTS);
   const billValues = getSheetValues(SHEET_NAMES.SALES_BILLS);
   const lineValues = getSheetValues(SHEET_NAMES.SALES_LINES);
+  const purchaseValues = getSheetValues(SHEET_NAMES.PURCHASES);
 
   const productIdx = productValues.length ? buildHeaderIndex(productValues[0]) : {};
   const billIdx = billValues.length ? buildHeaderIndex(billValues[0]) : {};
   const lineIdx = lineValues.length ? buildHeaderIndex(lineValues[0]) : {};
+  const purchaseIdx = purchaseValues.length ? buildHeaderIndex(purchaseValues[0]) : {};
 
-  const productCost = {};
+  const currentProductCost = {};
   for (let i = 1; i < productValues.length; i++) {
     const p = normalizeProductObjectFromRow(productValues[i], productIdx);
-    productCost[String(p.ID)] = toNumberSafe(p.Cost);
+    currentProductCost[String(p.ID)] = toNumberSafe(p.Cost);
+  }
+
+  // Latest known purchase cost per item as a fallback for legacy sales lines with no UnitCost.
+  const latestPurchaseCost = {};
+  for (let i = 1; i < purchaseValues.length; i++) {
+    const row = purchaseValues[i];
+    const itemId = String(getField(row, purchaseIdx, 'ItemID', 3) || '');
+    if (!itemId) continue;
+    latestPurchaseCost[itemId] = toNumberSafe(getField(row, purchaseIdx, 'Cost', 6));
   }
 
   const tz = getTZ();
-  const billMonth = {};
+  const activeBills = {};
   const monthlyRevenue = {};
   let totalRevenue = 0;
 
@@ -1156,15 +1253,18 @@ function getProfitData(params) {
     if (String(b.Status || '').toUpperCase() !== 'ACTIVE') continue;
 
     const billNo = String(b.BillNo || '');
+    if (!billNo) continue;
+
     const dt = b.DateTime ? new Date(b.DateTime) : null;
     const monthKey = dt && !isNaN(dt.getTime()) ? Utilities.formatDate(dt, tz, 'yyyy-MM') : 'unknown';
 
     if (params.startMonth && monthKey < params.startMonth) continue;
     if (params.endMonth && monthKey > params.endMonth) continue;
 
-    billMonth[billNo] = monthKey;
     const grand = toNumberSafe(b.GrandTotal);
-    if (Math.abs(grand) > 1000000000) continue; // skip corrupted rows
+    if (Math.abs(grand) > 1000000000) continue; // skip obviously corrupted rows
+
+    activeBills[billNo] = monthKey;
     monthlyRevenue[monthKey] = (monthlyRevenue[monthKey] || 0) + grand;
     totalRevenue += grand;
   }
@@ -1174,18 +1274,26 @@ function getProfitData(params) {
 
   for (let i = 1; i < lineValues.length; i++) {
     const ln = normalizeLineObjectFromRow(lineValues[i], lineIdx);
-    if (String(ln.Status || '').toUpperCase() !== 'ACTIVE') continue;
-    if (String(ln.LineType || '').toUpperCase() !== 'SALE') continue;
-
+    const lineStatus = String(ln.Status || '').toUpperCase();
+    const lineType = String(ln.LineType || '').toUpperCase();
     const billNo = String(ln.BillNo || '');
-    const monthKey = billMonth[billNo] || (ln.DateTime ? Utilities.formatDate(new Date(ln.DateTime), tz, 'yyyy-MM') : 'unknown');
 
+    if (lineStatus !== 'ACTIVE') continue;
+    if (lineType !== 'SALE') continue;
+    if (!activeBills[billNo]) continue; // only include lines belonging to active bills in the filtered set
+
+    const monthKey = activeBills[billNo];
     if (params.startMonth && monthKey < params.startMonth) continue;
     if (params.endMonth && monthKey > params.endMonth) continue;
 
     const qty = toNumberSafe(ln.Qty);
-    const costPer = productCost[String(ln.ItemID)] || 0;
-    const lineCost = qty * costPer;
+    // Prefer historical unit cost stored on the sales line. If absent (legacy data),
+    // fall back to latest purchase cost, then current product cost.
+    let unitCost = toNumberSafe(ln.UnitCost);
+    if (!unitCost) unitCost = toNumberSafe(latestPurchaseCost[String(ln.ItemID)] || 0);
+    if (!unitCost) unitCost = toNumberSafe(currentProductCost[String(ln.ItemID)] || 0);
+
+    const lineCost = qty * unitCost;
 
     monthlyCogs[monthKey] = (monthlyCogs[monthKey] || 0) + lineCost;
     totalCogs += lineCost;
@@ -1212,6 +1320,7 @@ function getProfitData(params) {
   return {
     totalRevenue: totalRevenue,
     cogs: totalCogs,
+    netProfit: totalRevenue - totalCogs,
     monthlyProfit: monthlyProfit
   };
 }

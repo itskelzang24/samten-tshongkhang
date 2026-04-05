@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, Component, Suspense } from 'react';
-import { 
-  LayoutDashboard, 
-  ShoppingCart, 
-  Package, 
-  History, 
-  Settings, 
-  Search, 
-  Plus, 
-  Minus, 
-  Trash2, 
-  Printer, 
-  Save, 
-  X, 
-  ChevronRight, 
+import {
+  LayoutDashboard,
+  ShoppingCart,
+  Package,
+  History,
+  Settings,
+  Search,
+  Plus,
+  Minus,
+  Trash2,
+  Printer,
+  Save,
+  X,
+  ChevronRight,
   AlertCircle,
   Barcode,
   Phone,
@@ -33,12 +33,12 @@ import {
   ShieldCheck,
   Users as UsersIcon
 } from 'lucide-react';
-import { 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer, 
+import {
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
   PieChart,
   Pie,
   LineChart,
@@ -133,8 +133,8 @@ const TabButton = ({ active, onClick, icon: Icon, label }: { active: boolean, on
     onClick={onClick}
     className={cn(
       "flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all border-b-2",
-      active 
-        ? "text-brand border-brand bg-brand-light" 
+      active
+        ? "text-brand border-brand bg-brand-light"
         : "text-slate-500 border-transparent hover:text-slate-700 hover:bg-slate-50"
     )}
   >
@@ -171,7 +171,7 @@ export class AppErrorBoundary extends (Component as any) {
           <p className="text-slate-500 max-w-md mb-8">
             The application encountered an unexpected error. Please try refreshing the page.
           </p>
-          <button 
+          <button
             onClick={() => window.location.reload()}
             className="px-8 py-3 bg-brand text-white font-bold rounded-2xl shadow-lg shadow-brand/20 hover:scale-105 transition-all"
           >
@@ -380,15 +380,15 @@ export default function App() {
     return () => { mounted = false; };
   }, [user, prefetchFinancials]);
 
-  // Auto-focus the barcode/search input whenever the POS tab is opened so
-  // users can scan or type immediately without clicking the scanner button.
+  // Auto-focus the barcode/search input whenever POS is active so
+  // a barcode scanner can type directly without needing a button click.
   useEffect(() => {
     if (activeTab !== 'pos') return;
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       barcodeInputRef.current?.focus();
       barcodeInputRef.current?.select();
     }, 50);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
   }, [activeTab, isEditing]);
 
   const addToCart = useCallback((product: Product) => {
@@ -614,7 +614,7 @@ export default function App() {
           rate: l.Rate,
           lineType: l.LineType || 'SALE',
           gstRate: l.GST_Rate || 0.05,
-          Selling: l.Rate 
+          Selling: l.Rate
         })));
         setMessage({ type: 'success', text: `Loaded bill ${actualBillNo} for editing` });
       } else {
@@ -636,7 +636,7 @@ export default function App() {
   const filteredSuggestions = useMemo(() => {
     if (!searchQuery) return [];
     const lowerQ = searchQuery.toLowerCase();
-    return products.filter(p => 
+    return products.filter(p =>
       p.ID.toString().toLowerCase().includes(lowerQ) ||
       p.Name.toLowerCase().includes(lowerQ) ||
       p.Category.toLowerCase().includes(lowerQ)
@@ -804,7 +804,7 @@ export default function App() {
               <span className="text-sm font-semibold text-slate-700">{user.username}</span>
               <span className="text-[10px] text-brand font-bold uppercase">{user.role}</span>
             </div>
-            <button 
+            <button
               onClick={handleLogout}
               className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 border border-slate-200 hover:bg-red-50 hover:text-red-600 transition-colors"
               title="Logout"
@@ -840,440 +840,440 @@ export default function App() {
       <div className="flex">
         <main className="flex-1">
           <div className="max-w-7xl mx-auto p-4 md:p-6">
-        {activeTab === 'dashboard' && isAllowed('dashboard') && (
-          <DashboardTab 
-            data={dashboardData} 
-            onRefresh={fetchDashboardData} 
-            onGoToInventory={() => setActiveTab('inventory')}
-            userRole={user?.role}
-          />
-        )}
-        {activeTab === 'pos' && isAllowed('pos') && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* LEFT: SEARCH & CART */}
-            <div className="lg:col-span-8 space-y-6">
-              {isEditing && (
-                <div className="bg-brand-light border border-brand-border p-3 rounded-xl flex items-center justify-between animate-in slide-in-from-top-2 duration-300">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-brand text-white rounded-lg flex items-center justify-center">
-                      <Edit size={16} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-brand uppercase tracking-wider">Editing Mode</p>
-                      <p className="text-sm font-black text-slate-800">Bill No: {isEditing}</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={resetPOS}
-                    className="px-3 py-1.5 bg-white border border-brand-border text-brand text-[10px] font-bold rounded-lg hover:bg-brand hover:text-white transition-all uppercase"
-                  >
-                    Cancel Edit
-                  </button>
-                </div>
-              )}
-              {/* SEARCH BAR */}
-              <div className="relative" ref={searchRef}>
-                <form onSubmit={handleBarcodeSearch} className="relative group">
-                  <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-brand transition-colors">
-                    <Search size={20} />
-                  </div>
-                  <input
-                    ref={barcodeInputRef}
-                    autoFocus={activeTab === 'pos'}
-                    name="productSearch"
-                    type="text"
-                    placeholder="Scan barcode or search products (ID, Name, Category)..."
-                    className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl shadow-sm focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-lg"
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setShowSuggestions(true);
-                    }}
-                    onFocus={() => setShowSuggestions(true)}
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => barcodeInputRef.current?.focus()}
-                    className="absolute inset-y-2 right-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl flex items-center gap-2 text-sm font-medium transition-colors"
-                  >
-                    <Barcode size={18} />
-                    <span className="hidden sm:inline">Focus Scanner</span>
-                  </button>
-                </form>
-
-                {/* SUGGESTIONS DROPDOWN */}
-                {showSuggestions && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="p-2 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider px-2">Products</span>
-                      <span className="text-[10px] text-slate-400 px-2">{filteredSuggestions.length} results</span>
-                    </div>
-                    <div className="max-h-[400px] overflow-y-auto">
-                      {filteredSuggestions.length > 0 ? (
-                        (filteredSuggestions || []).map((p) => (
-                          <button
-                            key={p.ID}
-                            onClick={() => addToCart(p)}
-                            disabled={loading}
-                            title={loading ? 'Update in progress' : undefined}
-                            className={cn(
-                              "w-full flex items-center justify-between p-4 transition-colors border-b border-slate-50 last:border-0 group",
-                              loading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-brand-light'
-                            )}
-                          >
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-hover:bg-brand-light group-hover:text-brand transition-colors">
-                                <Package size={20} />
-                              </div>
-                              <div className="text-left">
-                                <p className="font-semibold text-slate-800">{p.Name}</p>
-                                <p className="text-xs text-slate-500">{p.Category} • {p.Unit}</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-bold text-brand">Nu. {p.Selling.toFixed(2)}</p>
-                              <p className={cn("text-[10px] font-bold uppercase", p.Stock <= p.MinStock ? "text-red-500" : "text-slate-400")}>
-                                Stock: {p.Stock}
-                              </p>
-                            </div>
-                          </button>
-                        ))
-                      ) : (products.length === 0) ? (
-                        // Show skeleton suggestions while products are loading
-                        <div className="p-2 space-y-2">
-                          {Array.from({ length: 4 }).map((_, i) => (
-                            <div key={`suggest-skel-${i}`} className="flex items-center justify-between gap-4 p-3 border-b border-slate-50 last:border-0 animate-pulse">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-slate-200 rounded-lg" />
-                                <div className="space-y-1">
-                                  <div className="h-3 bg-slate-200 rounded w-40" />
-                                  <div className="h-2 bg-slate-200 rounded w-24" />
-                                </div>
-                              </div>
-                              <div className="space-y-1 text-right">
-                                <div className="h-3 bg-slate-200 rounded w-16 ml-auto" />
-                                <div className="h-2 bg-slate-200 rounded w-12 ml-auto" />
-                              </div>
-                            </div>
-                          ))}
+            {activeTab === 'dashboard' && isAllowed('dashboard') && (
+              <DashboardTab
+                data={dashboardData}
+                onRefresh={fetchDashboardData}
+                onGoToInventory={() => setActiveTab('inventory')}
+                userRole={user?.role}
+              />
+            )}
+            {activeTab === 'pos' && isAllowed('pos') && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* LEFT: SEARCH & CART */}
+                <div className="lg:col-span-8 space-y-6">
+                  {isEditing && (
+                    <div className="bg-brand-light border border-brand-border p-3 rounded-xl flex items-center justify-between animate-in slide-in-from-top-2 duration-300">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-brand text-white rounded-lg flex items-center justify-center">
+                          <Edit size={16} />
                         </div>
-                      ) : (
-                        <div className="p-4 text-sm text-slate-500">No products found</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* CART TABLE */}
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                    <ShoppingCart size={18} className="text-brand" />
-                    Current Cart
-                    {isEditing && <span className="ml-2 px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] rounded-full uppercase font-bold">Editing: {isEditing}</span>}
-                  </h3>
-                  <span className="text-xs font-medium text-slate-500">{cart.length} items</span>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-100">
-                        <th className="px-6 py-4">Item Details</th>
-                        <th className="px-6 py-4">Type</th>
-                        <th className="px-6 py-4 text-center">Quantity</th>
-                        <th className="px-6 py-4 text-right">Rate</th>
-                        <th className="px-6 py-4 text-right">Total</th>
-                        <th className="px-6 py-4"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {(!cart || cart.length === 0) ? (
-                        <tr>
-                          <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
-                            <div className="flex flex-col items-center gap-3">
-                              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-200">
-                                <ShoppingCart size={32} />
-                              </div>
-                              <p className="font-medium">Your cart is empty</p>
-                              <p className="text-xs">Scan items or search to add them to the bill</p>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : (
-                        cart.map((item, idx) => (
-                          <tr key={`${item.ID}-${item.lineType}-${idx}`} className="group hover:bg-slate-50/50 transition-colors">
-                            <td className="px-6 py-4">
-                              <p className="font-semibold text-slate-800">{item.Name}</p>
-                              <p className="text-[10px] text-slate-400 font-medium">ID: {item.ID} • {item.Category}</p>
-                            </td>
-                            <td className="px-6 py-4">
-                              <button
-                                onClick={() => toggleLineType(item.ID, item.lineType)}
-                                disabled={loading}
-                                title={loading ? 'Update in progress' : undefined}
-                                className={cn(
-                                  "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all",
-                                  item.lineType === 'SALE' ? "bg-brand-light text-brand" : "bg-red-100 text-red-700",
-                                  loading ? 'opacity-60 cursor-not-allowed' : (item.lineType === 'SALE' ? 'hover:bg-brand-border' : 'hover:bg-red-200')
-                                )}
-                              >
-                                {item.lineType}
-                              </button>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center justify-center gap-3">
-                                <button 
-                                  onClick={() => updateCartQty(item.ID, item.qty - 1, item.lineType)}
-                                  disabled={loading}
-                                  title={loading ? 'Update in progress' : undefined}
-                                  className={cn(
-                                    "w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all",
-                                    loading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white hover:border-brand hover:text-brand'
-                                  )}
-                                >
-                                  <Minus size={14} />
-                                </button>
-                                <span className="w-8 text-center font-bold text-slate-700">{item.qty}</span>
-                                <button 
-                                  onClick={() => updateCartQty(item.ID, item.qty + 1, item.lineType)}
-                                  disabled={loading}
-                                  title={loading ? 'Update in progress' : undefined}
-                                  className={cn(
-                                    "w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all",
-                                    loading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white hover:border-brand hover:text-brand'
-                                  )}
-                                >
-                                  <Plus size={14} />
-                                </button>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <span className="text-slate-400">Nu.</span>
-                                <input
-                                  type="number"
-                                  name={`rate-${item.ID}-${item.lineType}`}
-                                  className={cn(
-                                    "w-20 text-right font-bold text-slate-700 bg-transparent border-b border-transparent focus:border-brand outline-none transition-all p-1",
-                                    loading ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-200'
-                                  )}
-                                  value={item.rate}
-                                  onChange={(e) => updateCartRate(item.ID, parseFloat(e.target.value) || 0, item.lineType)}
-                                  disabled={loading}
-                                  title={loading ? 'Update in progress' : undefined}
-                                />
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <p className={cn("font-bold", item.lineType === 'SALE' ? "text-slate-800" : "text-red-600")}>
-                                {item.lineType === 'RETURN' && '-'}Nu. {(item.qty * item.rate).toFixed(2)}
-                              </p>
-                              <p className="text-[10px] text-slate-400 font-medium">GST: Nu. {(item.qty * item.rate * item.gstRate).toFixed(2)}</p>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <button 
-                                onClick={() => updateCartQty(item.ID, 0, item.lineType)}
-                                disabled={loading}
-                                title={loading ? 'Update in progress' : undefined}
-                                className={cn(
-                                  "p-2 text-slate-300 transition-colors opacity-0 group-hover:opacity-100",
-                                  loading ? 'opacity-60 cursor-not-allowed' : 'hover:text-red-500'
-                                )}
-                              >
-                                <Trash2 size={18} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            {/* RIGHT: BILL SUMMARY */}
-            <div className="lg:col-span-4 space-y-6">
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden sticky top-24">
-                <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                    <Save size={18} className="text-brand" />
-                    Checkout Summary
-                  </h3>
-                </div>
-
-                <div className="p-6 space-y-6">
-                  {/* CUSTOMER & PAYMENT */}
-                  <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <label htmlFor="customerName" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Customer Name</label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
-                          <User size={16} />
+                        <div>
+                          <p className="text-xs font-bold text-brand uppercase tracking-wider">Editing Mode</p>
+                          <p className="text-sm font-black text-slate-800">Bill No: {isEditing}</p>
                         </div>
-                        <input
-                          id="customerName"
-                          type="text"
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium"
-                          value={customerName}
-                          onChange={(e) => setCustomerName(e.target.value)}
-                        />
                       </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label htmlFor="customerContact" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Customer Contact</label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
-                          <Phone size={16} />
-                        </div>
-                        <input
-                          id="customerContact"
-                          type="text"
-                          placeholder="Phone or email (optional)"
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium"
-                          value={customerContact}
-                          onChange={(e) => setCustomerContact(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Payment Method</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => setPaymentMethod('CASH')}
-                          className={cn(
-                            "flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-bold transition-all",
-                            paymentMethod === 'CASH' 
-                              ? "bg-brand border-brand text-white shadow-lg shadow-brand-light" 
-                              : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
-                          )}
-                        >
-                          <Banknote size={16} />
-                          CASH
-                        </button>
-                        <button
-                          onClick={() => setPaymentMethod('QR')}
-                          className={cn(
-                            "flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-bold transition-all",
-                            paymentMethod === 'QR' 
-                              ? "bg-brand border-brand text-white shadow-lg shadow-brand-light" 
-                              : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
-                          )}
-                        >
-                          <Barcode size={16} />
-                          QR
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Transfer / transaction ID for non-cash payments */}
-                    {paymentMethod !== 'CASH' && (
-                      <div className="space-y-1.5">
-                        <label htmlFor="transferId" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Transaction ID</label>
-                        <input
-                          id="transferId"
-                          type="text"
-                          placeholder="Bank transfer / transaction ID"
-                          className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium"
-                          value={transferId}
-                          onChange={(e) => setTransferId(e.target.value)}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="h-px bg-slate-100" />
-
-                  {/* TOTALS */}
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500 font-medium">Subtotal</span>
-                      <span className="text-slate-800 font-bold">Nu. {subtotal.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500 font-medium">GST Total</span>
-                      <span className="text-slate-800 font-bold">Nu. {gstTotal.toFixed(2)}</span>
-                    </div>
-                    <div className="pt-3 border-t border-slate-100 flex justify-between items-end">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold uppercase text-brand tracking-wider">Grand Total</span>
-                        <span className="text-3xl font-black text-slate-900 tracking-tight">Nu. {grandTotal.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ACTIONS */}
-                  <div className="space-y-3 pt-4">
-                    <button
-                      disabled={cart.length === 0 || loading}
-                      onClick={handleCheckout}
-                      title={loading ? 'Update in progress' : (cart.length === 0 ? 'Add items to enable checkout' : undefined)}
-                      className={cn(
-                        "w-full py-4 rounded-2xl flex items-center justify-center gap-3 text-lg font-black tracking-tight transition-all shadow-xl",
-                        // If cart is empty, show disabled grey style. If loading or active, keep brand color.
-                        cart.length === 0
-                          ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                          : (loading
-                              ? "bg-brand text-white shadow-brand-light cursor-not-allowed opacity-70"
-                              : "bg-brand text-white hover:bg-brand-hover shadow-brand-light active:scale-[0.98]")
-                      )}
-                    >
-                      {loading ? (
-                        // Spinner shown on brand background for clear feedback
-                        <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        <>
-                          <CheckCircle2 size={24} />
-                          {isEditing ? 'UPDATE BILL' : 'COMPLETE SALE'}
-                        </>
-                      )}
-                    </button>
-                    
-                    {isEditing && (
                       <button
                         onClick={resetPOS}
-                        className="w-full py-3 rounded-xl border border-slate-200 text-slate-500 font-bold text-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                        className="px-3 py-1.5 bg-white border border-brand-border text-brand text-[10px] font-bold rounded-lg hover:bg-brand hover:text-white transition-all uppercase"
                       >
-                        <X size={18} />
-                        CANCEL EDIT
+                        Cancel Edit
                       </button>
+                    </div>
+                  )}
+                  {/* SEARCH BAR */}
+                  <div className="relative" ref={searchRef}>
+                    <form onSubmit={handleBarcodeSearch} className="relative group">
+                      <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-brand transition-colors">
+                        <Search size={20} />
+                      </div>
+                      <input
+                        ref={barcodeInputRef}
+                        autoFocus={activeTab === 'pos'}
+                        name="productSearch"
+                        type="text"
+                        placeholder="Scan barcode or search products (ID, Name, Category)..."
+                        className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl shadow-sm focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-lg"
+                        value={searchQuery}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          setShowSuggestions(true);
+                        }}
+                        onFocus={() => setShowSuggestions(true)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => barcodeInputRef.current?.focus()}
+                        className="absolute inset-y-2 right-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl flex items-center gap-2 text-sm font-medium transition-colors"
+                      >
+                        <Barcode size={18} />
+                        <span className="hidden sm:inline">Focus Scanner</span>
+                      </button>
+                    </form>
+
+                    {/* SUGGESTIONS DROPDOWN */}
+                    {showSuggestions && (
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-20 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="p-2 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                          <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider px-2">Products</span>
+                          <span className="text-[10px] text-slate-400 px-2">{filteredSuggestions.length} results</span>
+                        </div>
+                        <div className="max-h-[400px] overflow-y-auto">
+                          {filteredSuggestions.length > 0 ? (
+                            (filteredSuggestions || []).map((p) => (
+                              <button
+                                key={p.ID}
+                                onClick={() => addToCart(p)}
+                                disabled={loading}
+                                title={loading ? 'Update in progress' : undefined}
+                                className={cn(
+                                  "w-full flex items-center justify-between p-4 transition-colors border-b border-slate-50 last:border-0 group",
+                                  loading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-brand-light'
+                                )}
+                              >
+                                <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-hover:bg-brand-light group-hover:text-brand transition-colors">
+                                    <Package size={20} />
+                                  </div>
+                                  <div className="text-left">
+                                    <p className="font-semibold text-slate-800">{p.Name}</p>
+                                    <p className="text-xs text-slate-500">{p.Category} • {p.Unit}</p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-bold text-brand">Nu. {p.Selling.toFixed(2)}</p>
+                                  <p className={cn("text-[10px] font-bold uppercase", p.Stock <= p.MinStock ? "text-red-500" : "text-slate-400")}>
+                                    Stock: {p.Stock}
+                                  </p>
+                                </div>
+                              </button>
+                            ))
+                          ) : (products.length === 0) ? (
+                            // Show skeleton suggestions while products are loading
+                            <div className="p-2 space-y-2">
+                              {Array.from({ length: 4 }).map((_, i) => (
+                                <div key={`suggest-skel-${i}`} className="flex items-center justify-between gap-4 p-3 border-b border-slate-50 last:border-0 animate-pulse">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-slate-200 rounded-lg" />
+                                    <div className="space-y-1">
+                                      <div className="h-3 bg-slate-200 rounded w-40" />
+                                      <div className="h-2 bg-slate-200 rounded w-24" />
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1 text-right">
+                                    <div className="h-3 bg-slate-200 rounded w-16 ml-auto" />
+                                    <div className="h-2 bg-slate-200 rounded w-12 ml-auto" />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="p-4 text-sm text-slate-500">No products found</div>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
 
-                  {message && (
-                    <div className={cn(
-                      "p-4 rounded-xl flex items-start gap-3 animate-in fade-in zoom-in duration-300",
-                      message.type === 'success' ? "bg-brand-light text-brand border border-brand-border" : "bg-red-50 text-red-700 border border-red-100"
-                    )}>
-                      {message.type === 'success' ? <CheckCircle2 size={20} className="shrink-0" /> : <AlertCircle size={20} className="shrink-0" />}
-                      <p className="text-sm font-medium">{message.text}</p>
+                  {/* CART TABLE */}
+                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <ShoppingCart size={18} className="text-brand" />
+                        Current Cart
+                        {isEditing && <span className="ml-2 px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] rounded-full uppercase font-bold">Editing: {isEditing}</span>}
+                      </h3>
+                      <span className="text-xs font-medium text-slate-500">{cart.length} items</span>
                     </div>
-                  )}
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-100">
+                            <th className="px-6 py-4">Item Details</th>
+                            <th className="px-6 py-4">Type</th>
+                            <th className="px-6 py-4 text-center">Quantity</th>
+                            <th className="px-6 py-4 text-right">Rate</th>
+                            <th className="px-6 py-4 text-right">Total</th>
+                            <th className="px-6 py-4"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {(!cart || cart.length === 0) ? (
+                            <tr>
+                              <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                                <div className="flex flex-col items-center gap-3">
+                                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-200">
+                                    <ShoppingCart size={32} />
+                                  </div>
+                                  <p className="font-medium">Your cart is empty</p>
+                                  <p className="text-xs">Scan items or search to add them to the bill</p>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : (
+                            cart.map((item, idx) => (
+                              <tr key={`${item.ID}-${item.lineType}-${idx}`} className="group hover:bg-slate-50/50 transition-colors">
+                                <td className="px-6 py-4">
+                                  <p className="font-semibold text-slate-800">{item.Name}</p>
+                                  <p className="text-[10px] text-slate-400 font-medium">ID: {item.ID} • {item.Category}</p>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <button
+                                    onClick={() => toggleLineType(item.ID, item.lineType)}
+                                    disabled={loading}
+                                    title={loading ? 'Update in progress' : undefined}
+                                    className={cn(
+                                      "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all",
+                                      item.lineType === 'SALE' ? "bg-brand-light text-brand" : "bg-red-100 text-red-700",
+                                      loading ? 'opacity-60 cursor-not-allowed' : (item.lineType === 'SALE' ? 'hover:bg-brand-border' : 'hover:bg-red-200')
+                                    )}
+                                  >
+                                    {item.lineType}
+                                  </button>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center justify-center gap-3">
+                                    <button
+                                      onClick={() => updateCartQty(item.ID, item.qty - 1, item.lineType)}
+                                      disabled={loading}
+                                      title={loading ? 'Update in progress' : undefined}
+                                      className={cn(
+                                        "w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all",
+                                        loading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white hover:border-brand hover:text-brand'
+                                      )}
+                                    >
+                                      <Minus size={14} />
+                                    </button>
+                                    <span className="w-8 text-center font-bold text-slate-700">{item.qty}</span>
+                                    <button
+                                      onClick={() => updateCartQty(item.ID, item.qty + 1, item.lineType)}
+                                      disabled={loading}
+                                      title={loading ? 'Update in progress' : undefined}
+                                      className={cn(
+                                        "w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center transition-all",
+                                        loading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white hover:border-brand hover:text-brand'
+                                      )}
+                                    >
+                                      <Plus size={14} />
+                                    </button>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <span className="text-slate-400">Nu.</span>
+                                    <input
+                                      type="number"
+                                      name={`rate-${item.ID}-${item.lineType}`}
+                                      className={cn(
+                                        "w-20 text-right font-bold text-slate-700 bg-transparent border-b border-transparent focus:border-brand outline-none transition-all p-1",
+                                        loading ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-200'
+                                      )}
+                                      value={item.rate}
+                                      onChange={(e) => updateCartRate(item.ID, parseFloat(e.target.value) || 0, item.lineType)}
+                                      disabled={loading}
+                                      title={loading ? 'Update in progress' : undefined}
+                                    />
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <p className={cn("font-bold", item.lineType === 'SALE' ? "text-slate-800" : "text-red-600")}>
+                                    {item.lineType === 'RETURN' && '-'}Nu. {(item.qty * item.rate).toFixed(2)}
+                                  </p>
+                                  <p className="text-[10px] text-slate-400 font-medium">GST: Nu. {(item.qty * item.rate * item.gstRate).toFixed(2)}</p>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <button
+                                    onClick={() => updateCartQty(item.ID, 0, item.lineType)}
+                                    disabled={loading}
+                                    title={loading ? 'Update in progress' : undefined}
+                                    className={cn(
+                                      "p-2 text-slate-300 transition-colors opacity-0 group-hover:opacity-100",
+                                      loading ? 'opacity-60 cursor-not-allowed' : 'hover:text-red-500'
+                                    )}
+                                  >
+                                    <Trash2 size={18} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RIGHT: BILL SUMMARY */}
+                <div className="lg:col-span-4 space-y-6">
+                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden sticky top-24">
+                    <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <Save size={18} className="text-brand" />
+                        Checkout Summary
+                      </h3>
+                    </div>
+
+                    <div className="p-6 space-y-6">
+                      {/* CUSTOMER & PAYMENT */}
+                      <div className="space-y-4">
+                        <div className="space-y-1.5">
+                          <label htmlFor="customerName" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Customer Name</label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
+                              <User size={16} />
+                            </div>
+                            <input
+                              id="customerName"
+                              type="text"
+                              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium"
+                              value={customerName}
+                              onChange={(e) => setCustomerName(e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label htmlFor="customerContact" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Customer Contact</label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
+                              <Phone size={16} />
+                            </div>
+                            <input
+                              id="customerContact"
+                              type="text"
+                              placeholder="Phone or email (optional)"
+                              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium"
+                              value={customerContact}
+                              onChange={(e) => setCustomerContact(e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Payment Method</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => setPaymentMethod('CASH')}
+                              className={cn(
+                                "flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-bold transition-all",
+                                paymentMethod === 'CASH'
+                                  ? "bg-brand border-brand text-white shadow-lg shadow-brand-light"
+                                  : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                              )}
+                            >
+                              <Banknote size={16} />
+                              CASH
+                            </button>
+                            <button
+                              onClick={() => setPaymentMethod('QR')}
+                              className={cn(
+                                "flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-bold transition-all",
+                                paymentMethod === 'QR'
+                                  ? "bg-brand border-brand text-white shadow-lg shadow-brand-light"
+                                  : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                              )}
+                            >
+                              <Barcode size={16} />
+                              QR
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Transfer / transaction ID for non-cash payments */}
+                        {paymentMethod !== 'CASH' && (
+                          <div className="space-y-1.5">
+                            <label htmlFor="transferId" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Transaction ID</label>
+                            <input
+                              id="transferId"
+                              type="text"
+                              placeholder="Bank transfer / transaction ID"
+                              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium"
+                              value={transferId}
+                              onChange={(e) => setTransferId(e.target.value)}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="h-px bg-slate-100" />
+
+                      {/* TOTALS */}
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500 font-medium">Subtotal</span>
+                          <span className="text-slate-800 font-bold">Nu. {subtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500 font-medium">GST Total</span>
+                          <span className="text-slate-800 font-bold">Nu. {gstTotal.toFixed(2)}</span>
+                        </div>
+                        <div className="pt-3 border-t border-slate-100 flex justify-between items-end">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold uppercase text-brand tracking-wider">Grand Total</span>
+                            <span className="text-3xl font-black text-slate-900 tracking-tight">Nu. {grandTotal.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ACTIONS */}
+                      <div className="space-y-3 pt-4">
+                        <button
+                          disabled={cart.length === 0 || loading}
+                          onClick={handleCheckout}
+                          title={loading ? 'Update in progress' : (cart.length === 0 ? 'Add items to enable checkout' : undefined)}
+                          className={cn(
+                            "w-full py-4 rounded-2xl flex items-center justify-center gap-3 text-lg font-black tracking-tight transition-all shadow-xl",
+                            // If cart is empty, show disabled grey style. If loading or active, keep brand color.
+                            cart.length === 0
+                              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                              : (loading
+                                ? "bg-brand text-white shadow-brand-light cursor-not-allowed opacity-70"
+                                : "bg-brand text-white hover:bg-brand-hover shadow-brand-light active:scale-[0.98]")
+                          )}
+                        >
+                          {loading ? (
+                            // Spinner shown on brand background for clear feedback
+                            <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              <CheckCircle2 size={24} />
+                              {isEditing ? 'UPDATE BILL' : 'COMPLETE SALE'}
+                            </>
+                          )}
+                        </button>
+
+                        {isEditing && (
+                          <button
+                            onClick={resetPOS}
+                            className="w-full py-3 rounded-xl border border-slate-200 text-slate-500 font-bold text-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                          >
+                            <X size={18} />
+                            CANCEL EDIT
+                          </button>
+                        )}
+                      </div>
+
+                      {message && (
+                        <div className={cn(
+                          "p-4 rounded-xl flex items-start gap-3 animate-in fade-in zoom-in duration-300",
+                          message.type === 'success' ? "bg-brand-light text-brand border border-brand-border" : "bg-red-50 text-red-700 border border-red-100"
+                        )}>
+                          {message.type === 'success' ? <CheckCircle2 size={20} className="shrink-0" /> : <AlertCircle size={20} className="shrink-0" />}
+                          <p className="text-sm font-medium">{message.text}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {activeTab === 'financials' && (
-          <FinancialsTab onEdit={editExistingBill} onNotify={setMessage} prefetchedBills={prefetchedBills} />
-        )}
+            {activeTab === 'financials' && (
+              <FinancialsTab onEdit={editExistingBill} onNotify={setMessage} prefetchedBills={prefetchedBills} />
+            )}
 
-        {activeTab === 'profit' && isAllowed('financials') && (
-          <ProfitTab />
-        )}
+            {activeTab === 'profit' && isAllowed('financials') && (
+              <ProfitTab />
+            )}
 
-        {activeTab === 'inventory' && isAllowed('inventory') && (
-          <InventoryTab currentUser={currentUser} onRefresh={async () => { await fetchProducts(); await fetchDashboardData(); }} products={products} />
-        )}
+            {activeTab === 'inventory' && isAllowed('inventory') && (
+              <InventoryTab currentUser={currentUser} onRefresh={async () => { await fetchProducts(); await fetchDashboardData(); }} products={products} />
+            )}
 
-        {activeTab === 'setup' && user.role === 'ADMIN' && (
-          <SetupTab config={config} onRefresh={fetchConfig} />
-        )}
+            {activeTab === 'setup' && user.role === 'ADMIN' && (
+              <SetupTab config={config} onRefresh={fetchConfig} />
+            )}
           </div>
         </main>
       </div>
@@ -1288,28 +1288,28 @@ export default function App() {
                 <X size={20} className="text-slate-400" />
               </button>
             </div>
-            
-            <div className="p-8">
-                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 text-center">
-                  <div className="w-14 h-14 bg-brand-light text-brand rounded-full flex items-center justify-center mx-auto mb-3">
-                    <CheckCircle2 size={28} />
-                  </div>
-                  <h4 className="text-2xl font-black text-slate-900">Nu. {lastBill.GrandTotal.toFixed(2)}</h4>
-                  <p className="text-sm text-slate-500 font-medium">Bill No: <span className="text-slate-800 font-bold">{lastBill.BillNo}</span></p>
-                  <p className="text-xs text-slate-400">{format(new Date(lastBill.DateTime), 'PPpp')}</p>
-                  {lastBill.CustomerContact && <p className="text-xs text-slate-400">Contact: <span className="text-slate-800">{lastBill.CustomerContact}</span></p>}
-                  {lastBill.TransferId && <p className="text-xs text-slate-400">Txn ID: <span className="text-slate-800">{lastBill.TransferId}</span></p>}
-                </div>
 
-                <div className="mt-8 space-y-3">
-                <button 
+            <div className="p-8">
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 text-center">
+                <div className="w-14 h-14 bg-brand-light text-brand rounded-full flex items-center justify-center mx-auto mb-3">
+                  <CheckCircle2 size={28} />
+                </div>
+                <h4 className="text-2xl font-black text-slate-900">Nu. {lastBill.GrandTotal.toFixed(2)}</h4>
+                <p className="text-sm text-slate-500 font-medium">Bill No: <span className="text-slate-800 font-bold">{lastBill.BillNo}</span></p>
+                <p className="text-xs text-slate-400">{format(new Date(lastBill.DateTime), 'PPpp')}</p>
+                {lastBill.CustomerContact && <p className="text-xs text-slate-400">Contact: <span className="text-slate-800">{lastBill.CustomerContact}</span></p>}
+                {lastBill.TransferId && <p className="text-xs text-slate-400">Txn ID: <span className="text-slate-800">{lastBill.TransferId}</span></p>}
+              </div>
+
+              <div className="mt-8 space-y-3">
+                <button
                   onClick={() => handlePrint()}
                   className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-xl shadow-slate-200"
                 >
                   <Printer size={20} />
                   PRINT RECEIPT
                 </button>
-                <button 
+                <button
                   onClick={() => setShowReceipt(false)}
                   className="w-full py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all"
                 >
@@ -1329,7 +1329,7 @@ export default function App() {
             <p className="text-xs">Sunday Market, Thimphu</p>
             <p className="text-xs">Phone: +975 17655336 / +975 17909608</p>
           </div>
-          
+
           <div className="border-y border-dashed py-2 mb-4 space-y-1">
             <div className="flex justify-between">
               <span>Bill No:</span>
@@ -1341,24 +1341,24 @@ export default function App() {
             </div>
             <div className="flex justify-between">
               <span>Customer:</span>
-                <span>{lastBill?.CustomerName}</span>
+              <span>{lastBill?.CustomerName}</span>
             </div>
             <div className="flex justify-between">
               <span>User:</span>
               <span>{lastBill?.User}</span>
             </div>
-              {lastBill?.CustomerContact && (
-                <div className="flex justify-between">
-                  <span>Contact:</span>
-                  <span>{lastBill?.CustomerContact}</span>
-                </div>
-              )}
-              {lastBill?.TransferId && (
-                <div className="flex justify-between">
-                  <span>Txn ID:</span>
-                  <span>{lastBill?.TransferId}</span>
-                </div>
-              )}
+            {lastBill?.CustomerContact && (
+              <div className="flex justify-between">
+                <span>Contact:</span>
+                <span>{lastBill?.CustomerContact}</span>
+              </div>
+            )}
+            {lastBill?.TransferId && (
+              <div className="flex justify-between">
+                <span>Txn ID:</span>
+                <span>{lastBill?.TransferId}</span>
+              </div>
+            )}
           </div>
 
           <table className="w-full mb-4">
@@ -1467,7 +1467,7 @@ function LoginScreen({ onLogin, fetchConfig, prefetchFinancials }: { onLogin: (u
             <p className="text-white/70 text-sm font-medium">Please sign in to continue</p>
           </div>
         </div>
-        
+
         <form onSubmit={handleLogin} className="p-8 space-y-6">
           {error && (
             <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-medium flex items-center gap-2 animate-in slide-in-from-top-2">
@@ -1475,18 +1475,18 @@ function LoginScreen({ onLogin, fetchConfig, prefetchFinancials }: { onLogin: (u
               {error}
             </div>
           )}
-          
+
           <div className="space-y-1.5">
             <label htmlFor="loginUsername" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Username</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
                 <User size={18} />
               </div>
-              <input 
+              <input
                 required
                 id="loginUsername"
                 name="username"
-                type="text" 
+                type="text"
                 className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all font-medium"
                 placeholder="Enter username"
                 value={username}
@@ -1501,7 +1501,7 @@ function LoginScreen({ onLogin, fetchConfig, prefetchFinancials }: { onLogin: (u
               <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
                 <ShieldCheck size={18} />
               </div>
-              <input 
+              <input
                 required
                 id="loginPassword"
                 name="password"
@@ -1522,7 +1522,7 @@ function LoginScreen({ onLogin, fetchConfig, prefetchFinancials }: { onLogin: (u
             </div>
           </div>
 
-          <button 
+          <button
             disabled={loading}
             onClick={() => { /* click handled by form submit */ }}
             title={loading ? 'Signing in...' : undefined}
@@ -1535,7 +1535,7 @@ function LoginScreen({ onLogin, fetchConfig, prefetchFinancials }: { onLogin: (u
           >
             {loading ? <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" /> : 'SIGN IN'}
           </button>
-          
+
           <p className="text-center text-xs text-slate-400 font-medium">
             Forgot password? Contact your administrator.
           </p>
@@ -1589,7 +1589,7 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-black text-slate-800 tracking-tight">System Settings</h2>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
           <div className="flex items-center gap-3 mb-6">
@@ -1614,9 +1614,9 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
                   </div>
                   <span className="text-sm font-bold text-slate-700 capitalize">{tab}</span>
                 </div>
-                <input 
-                  type="checkbox" 
-                  className="hidden" 
+                <input
+                  type="checkbox"
+                  className="hidden"
                   checked={perms[tab] || false}
                   onChange={() => togglePerm(tab)}
                 />
@@ -1624,7 +1624,7 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
             ))}
           </div>
 
-          <button 
+          <button
             disabled={loading}
             onClick={handleSavePerms}
             title={loading ? 'Saving permissions...' : undefined}
@@ -1648,13 +1648,13 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
               <p className="text-xs text-slate-500">System-wide parameters</p>
             </div>
           </div>
-          
+
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">GST Rate (%)</label>
-              <input 
+              <input
                 name="gstPercent"
-                type="number" 
+                type="number"
                 min={0}
                 max={100}
                 step={0.01}
@@ -1665,9 +1665,9 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Bill Prefix</label>
-              <input 
+              <input
                 name="billPrefix"
-                type="text" 
+                type="text"
                 className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700"
                 value={billPrefix}
                 onChange={(e) => setBillPrefix(e.target.value)}
@@ -1675,7 +1675,7 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
             </div>
           </div>
           <div className="mt-6 flex gap-3">
-            <button 
+            <button
               disabled={loading}
               title={loading ? 'Saving configuration...' : undefined}
               onClick={async () => {
@@ -1709,7 +1709,7 @@ function SetupTab({ config, onRefresh }: { config: Config | null, onRefresh: () 
               {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={18} />}
               <span className="ml-2">SAVE CONFIG</span>
             </button>
-            <button onClick={() => { if (config) { setGstPercent((config.gst_rate||0)*100); setBillPrefix(config.bill_prefix||''); } }} className="py-3 px-4 bg-white border border-slate-200 rounded-xl font-bold">RESET</button>
+            <button onClick={() => { if (config) { setGstPercent((config.gst_rate || 0) * 100); setBillPrefix(config.bill_prefix || ''); } }} className="py-3 px-4 bg-white border border-slate-200 rounded-xl font-bold">RESET</button>
           </div>
           <p className="mt-3 text-[10px] text-slate-400 italic">Advanced settings can also be modified directly in the <code>System_Config</code> sheet.</p>
         </div>
@@ -1818,7 +1818,7 @@ function DashboardTab({ data, onRefresh, onGoToInventory, userRole }: { data: an
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">Business Overview</h2>
           <p className="text-sm text-slate-500 font-medium">Real-time insights into your supermarket performance</p>
         </div>
-        <button 
+        <button
           onClick={onRefresh}
           className="p-2 hover:bg-white rounded-xl border border-slate-200 text-slate-500 transition-all"
         >
@@ -1846,8 +1846,8 @@ function DashboardTab({ data, onRefresh, onGoToInventory, userRole }: { data: an
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-  {/* MONTHLY SALES TREND */}
-  <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col">
+        {/* MONTHLY SALES TREND */}
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-slate-800 flex items-center gap-2">
               <TrendingUp size={18} className="text-brand" />
@@ -1876,27 +1876,34 @@ function DashboardTab({ data, onRefresh, onGoToInventory, userRole }: { data: an
 
                 const fullData = months.map(m => {
                   const found = sales.find((s: any) => String(s.name) === m.name);
-                  return { name: m.name, value: found ? Number(found.value) : null };
+                  return { name: m.name, value: found ? Number(found.value) : 0 };
                 });
 
                 return (
                   <ResponsiveContainer width="100%" height="100%">
                     {/* Show all 12 months on the X-axis; null values create gaps (no connecting lines) */}
                     {/* Increase right margin and right padding so the last tick label (Dec) is fully visible */}
-                    <LineChart data={fullData} margin={{ top: 10, right: 40, left: 0, bottom: 4 }}>
+                    <LineChart data={fullData} margin={{ top: 10, right: 40, left: 0, bottom: 12 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis
                         dataKey="name"
                         type="category"
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: '#94a3b8', fontSize: 11 }}
-                        interval={0}
+                        tick={{ fill: '#94a3b8', fontSize: 10 }}
+                        interval={0} // 🔥 force ALL labels to show
+                        angle={window.innerWidth < 640 ? -35 : 0}
+                        textAnchor={window.innerWidth < 640 ? 'end' : 'middle'}
+                        height={window.innerWidth < 640 ? 60 : 30}
                         padding={{ left: 0, right: 12 }}
+                        tickFormatter={(value: string) => {
+                          // show short month always (better for mobile)
+                          return String(value).split(' ')[0]; // Jan, Feb, Mar...
+                        }}
                       />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `Nu. ${v}`} />
-                      <Tooltip contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 8px 12px -6px rgb(0 0 0 / 0.08)' }} formatter={(value: any) => (typeof value === 'number' ? `Nu. ${Number(value).toFixed(2)}` : value)} />
-                      <Line connectNulls={false} type="monotone" dataKey="value" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `Nu. ${v}`} width={56} />
+                      <Tooltip contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 8px 12px -6px rgb(0 0 0 / 0.08)' }} formatter={(value: any) => (typeof value === 'number' ? `Nu. ${Number(value).toFixed(2)}` : value)} labelFormatter={(label: string) => label} />
+                      <Line connectNulls={true} type="monotone" dataKey="value" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} isAnimationActive animationDuration={700} animationEasing="ease-out" />
                     </LineChart>
                   </ResponsiveContainer>
                 );
@@ -1928,7 +1935,7 @@ function DashboardTab({ data, onRefresh, onGoToInventory, userRole }: { data: an
                 {lowStock.length} ITEMS
               </span>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
               {lowStock.length > 0 ? (
                 lowStock.map((item: any) => (
@@ -1951,7 +1958,7 @@ function DashboardTab({ data, onRefresh, onGoToInventory, userRole }: { data: an
               )}
             </div>
 
-            <button 
+            <button
               onClick={onGoToInventory}
               className="mt-6 w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
             >
@@ -2094,10 +2101,10 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
     fetchController.current = new AbortController();
 
     try {
-  const params: Record<string, string> = { action: 'listBills', limit: String(limit) };
-  // If the caller didn't provide explicit start/end, default to today's date
-  // so that an empty UI date field still shows today's transactions.
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const params: Record<string, string> = { action: 'listBills', limit: String(limit) };
+      // If the caller didn't provide explicit start/end, default to today's date
+      // so that an empty UI date field still shows today's transactions.
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
       // When fetching pages by offset, pass `offset`. If date filters exist,
       // include `start` and `end` as date-range filters. Prefers explicit
       // offset for pagination.
@@ -2129,8 +2136,8 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
         setBills(normalized);
       }
 
-  setHasMore(normalized.length === limit);
-  setStartIndex(start + normalized.length);
+      setHasMore(normalized.length === limit);
+      setStartIndex(start + normalized.length);
       return normalized;
     } catch (err: any) {
       if (err.name === 'AbortError') {
@@ -2206,7 +2213,7 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-black text-slate-800 tracking-tight">Financial History</h2>
         <div className="flex gap-3">
-          <button 
+          <button
             onClick={exportToExcel}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all"
           >
@@ -2230,7 +2237,7 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
 
       {/* Filters: date range and bill number search */}
       <div className="mt-4 mb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <label htmlFor="filterStartDate" className="text-xs text-slate-500 mr-2">Start</label>
           <input id="filterStartDate" name="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm" />
           <label htmlFor="filterEndDate" className="text-xs text-slate-500 ml-3 mr-2">End</label>
@@ -2306,8 +2313,8 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
                     ))}
                   </>
                 ) : (bills && bills.length > 0) ? (bills || []).map((bill, idx) => (
-                  <tr 
-                    key={`${getBillNo(bill)}-${idx}`} 
+                  <tr
+                    key={`${getBillNo(bill)}-${idx}`}
                     className={cn(
                       "group hover:bg-slate-50 transition-colors cursor-pointer",
                       getBillNo(selectedBill) === getBillNo(bill) && "bg-brand-light"
@@ -2327,10 +2334,10 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button 
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          onEdit(getBillNo(bill)); 
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(getBillNo(bill));
                         }}
                         className="p-2 text-slate-400 hover:text-brand hover:bg-brand/10 rounded-lg transition-all active:scale-95"
                         title="Edit Bill"
@@ -2398,7 +2405,7 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
                       REOPEN
                     </button>
                   ) : (
-                    <button 
+                    <button
                       onClick={() => onEdit(getBillNo(selectedBill))}
                       className="p-1.5 text-brand hover:bg-brand/10 rounded-lg transition-all flex items-center gap-1 text-[10px] font-bold uppercase"
                     >
@@ -2428,7 +2435,7 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
                     <p className="text-sm font-bold text-slate-800">{format(new Date(selectedBill.DateTime), 'PP')}</p>
                   </div>
                 </div>
-                
+
                 {/* Contact & Transfer ID (if present) */}
                 {(selectedBill.CustomerContact || selectedBill.TransferId) && (
                   <div className="mt-3 grid grid-cols-2 gap-4">
@@ -2445,16 +2452,16 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
 
                 <div className="h-px bg-slate-100" />
 
-                  <div className="space-y-3">
-                    <p className="text-[10px] font-bold uppercase text-slate-500">Items Summary</p>
-                      {selectedLoading ? (
-                        <div className="h-24 flex items-center justify-center">
-                          <div className="w-6 h-6 border-4 border-slate-100 border-t-brand rounded-full animate-spin" />
-                        </div>
-                      ) : selectedBill.lines && selectedBill.lines.length > 0 ? (
-                      <div className="space-y-2">
-                        {selectedBill.lines.map((line, idx) => (
-                          <div key={`${getBillNo(selectedBill)}-line-${idx}`} className="flex justify-between text-xs p-2 bg-slate-50 rounded-lg border border-slate-100">
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold uppercase text-slate-500">Items Summary</p>
+                  {selectedLoading ? (
+                    <div className="h-24 flex items-center justify-center">
+                      <div className="w-6 h-6 border-4 border-slate-100 border-t-brand rounded-full animate-spin" />
+                    </div>
+                  ) : selectedBill.lines && selectedBill.lines.length > 0 ? (
+                    <div className="space-y-2">
+                      {selectedBill.lines.map((line, idx) => (
+                        <div key={`${getBillNo(selectedBill)}-line-${idx}`} className="flex justify-between text-xs p-2 bg-slate-50 rounded-lg border border-slate-100">
                           <div className="flex gap-2">
                             <span className="font-bold text-slate-400">{line.Qty}x</span>
                             <span className="text-slate-700">{line.ItemName}</span>
@@ -2589,7 +2596,7 @@ function ProfitTab() {
       await fetchProfit({ startMonth, endMonth });
       if (mounted) setLoading(false);
     })();
-    return () => { mounted = false; if (fetchControllerRef.current) { try { fetchControllerRef.current.abort(); } catch(e){} } };
+    return () => { mounted = false; if (fetchControllerRef.current) { try { fetchControllerRef.current.abort(); } catch (e) { } } };
   }, [fetchProfit]);
 
   // compute profit based solely on revenue and cogs
@@ -2617,7 +2624,7 @@ function ProfitTab() {
       </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
-          <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
           <label htmlFor="profitStartMonth" className="text-sm text-slate-500">Start month</label>
           <input
             id="profitStartMonth"
@@ -2732,7 +2739,7 @@ function ProfitTrendChart({ data, loading }: { data: Array<{ month: string; name
     const months = Array.from({ length: 12 }).map((_, i) => ({ name: format(new Date(year, i, 1), 'MMM yyyy'), monthIndex: i }));
     return months.map(m => {
       const found = sales.find((s: any) => String(s.name) === m.name);
-      return { name: m.name, profit: found ? Number(found.profit) : null };
+      return { name: m.name, profit: found ? Number(found.profit) : 0 };
     });
   }, [data]);
 
@@ -2741,12 +2748,26 @@ function ProfitTrendChart({ data, loading }: { data: Array<{ month: string; name
       <h3 className="text-lg font-bold mb-3">Profit Trend (monthly)</h3>
       <div className="w-full h-56 sm:h-72 lg:h-96">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={fullData} margin={{ top: 10, right: 40, left: 0, bottom: 4 }}>
+          <LineChart data={fullData} margin={{ top: 10, right: 40, left: 0, bottom: 12 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-            <XAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} interval={0} padding={{ left: 0, right: 12 }} />
-            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `Nu. ${v}`} />
-            <Tooltip contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 8px 12px -6px rgb(0 0 0 / 0.08)' }} formatter={(value: any) => (typeof value === 'number' ? `Nu. ${Number(value).toFixed(2)}` : value)} />
-            <Line connectNulls={false} type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} />
+            <XAxis
+              dataKey="name"
+              type="category"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: '#94a3b8', fontSize: window.innerWidth < 640 ? 9 : 11 }}
+              interval={0} // 🔥 force ALL months to show
+              angle={window.innerWidth < 640 ? -35 : 0}
+              textAnchor={window.innerWidth < 640 ? 'end' : 'middle'}
+              height={window.innerWidth < 640 ? 60 : 30}
+              padding={{ left: 0, right: 12 }}
+              tickFormatter={(value: string) => {
+                return String(value).split(' ')[0]; // Jan, Feb, Mar...
+              }}
+            />
+            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `Nu. ${v}`} width={56} />
+            <Tooltip contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 8px 12px -6px rgb(0 0 0 / 0.08)' }} formatter={(value: any) => (typeof value === 'number' ? `Nu. ${Number(value).toFixed(2)}` : value)} labelFormatter={(label: string) => label} />
+            <Line connectNulls={true} type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 6 }} isAnimationActive animationDuration={700} animationEasing="ease-out" />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -2860,9 +2881,9 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
   const handleAddProduct = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    
-  const form = e.currentTarget as HTMLFormElement;
-  const formData = new FormData(form);
+
+    const form = e.currentTarget as HTMLFormElement;
+    const formData = new FormData(form);
     const categoryRaw = isAddingNewCategory ? (formData.get('newCat') as string) : (formData.get('pCat') as string);
     const category = categoryRaw && categoryRaw.trim() ? categoryRaw.trim() : 'General';
 
@@ -2897,14 +2918,14 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ action: 'saveProduct', product })
       });
-  const data = await res.json();
-  console.debug('saveProduct response', data);
-  if (data && data.success) {
+      const data = await res.json();
+      console.debug('saveProduct response', data);
+      if (data && data.success) {
         // If user wanted to record this as a purchase, post a purchase transaction
-  const formData2 = new FormData(form);
-  const asPurchase = !!formData2.get('pAsPurchase');
-  const billNo = (formData2.get('pBill') as string) || `PUR-${Date.now()}`;
-  const vendor = (formData2.get('pVendor') as string) || product.Vendor || 'General';
+        const formData2 = new FormData(form);
+        const asPurchase = !!formData2.get('pAsPurchase');
+        const billNo = (formData2.get('pBill') as string) || `PUR-${Date.now()}`;
+        const vendor = (formData2.get('pVendor') as string) || product.Vendor || 'General';
         const qty = Number(product.Stock) || 0;
         const cost = Number(product.Cost) || 0;
         if (asPurchase && qty > 0) {
@@ -2915,10 +2936,10 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
           }
         }
 
-  setShowAddModal(false);
-  setIsAddingNewCategory(false);
-  try { await onRefresh(); } catch (e) { console.error('onRefresh failed', e); }
-  fetchCategories();
+        setShowAddModal(false);
+        setIsAddingNewCategory(false);
+        try { await onRefresh(); } catch (e) { console.error('onRefresh failed', e); }
+        fetchCategories();
       } else {
         console.error('saveProduct failed', data);
         alert('Failed to save product: ' + (data && data.error ? data.error : 'Unknown error'));
@@ -2960,7 +2981,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">Inventory Management</h2>
           <p className="text-sm text-slate-500 font-medium">{products.length} products in catalog</p>
         </div>
-  <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500">Labels per sheet</span>
             <div className="inline-flex rounded-lg bg-slate-50 p-1 border border-slate-100">
@@ -2987,21 +3008,21 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
             </div>
           </div>
 
-          <button 
+          <button
             onClick={exportToExcel}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all"
           >
             <Save size={18} />
             EXPORT EXCEL
           </button>
-          <button 
+          <button
             onClick={() => setShowAddCategoryModal(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all active:scale-[0.98]"
           >
             <Plus size={18} />
             ADD CATEGORY
           </button>
-          <button 
+          <button
             onClick={() => setShowAddModal(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-brand text-white rounded-xl font-bold shadow-lg shadow-brand-light hover:bg-brand-hover transition-all active:scale-[0.98]"
           >
@@ -3080,8 +3101,8 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
                         <div className="bg-white p-1 border border-slate-100 rounded shadow-sm inline-block w-fit">
-                          <BarcodeComponent 
-                            value={p.ID.toString()} 
+                          <BarcodeComponent
+                            value={p.ID.toString()}
                             width={0.8}
                             height={20}
                             displayValue={false}
@@ -3124,14 +3145,14 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button 
+                      <button
                         onClick={() => printBarcode(p.ID.toString())}
                         className="p-2 text-slate-400 hover:text-brand rounded-lg transition-all"
                         title="Print Barcode"
                       >
                         <Barcode size={18} />
                       </button>
-                      <button 
+                      <button
                         onClick={() => { setEditProduct(p); setEditAction('update'); setShowEditModal(true); }}
                         className="p-2 ml-2 text-slate-400 hover:text-brand rounded-lg transition-all"
                         title="Edit / Restock"
@@ -3195,7 +3216,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                 <X size={20} className="text-slate-400" />
               </button>
             </div>
-            
+
             <form onSubmit={handleAddCategoryOnly} className="p-8 space-y-6">
               <div className="space-y-1.5">
                 <label htmlFor="categoryName" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Category Name</label>
@@ -3203,7 +3224,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
               </div>
 
               <div className="pt-4 flex gap-3">
-                <button 
+                <button
                   type="button"
                   onClick={() => setShowAddCategoryModal(false)}
                   className={cn(
@@ -3213,7 +3234,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                 >
                   CANCEL
                 </button>
-                <button 
+                <button
                   type="submit"
                   disabled={loading}
                   title={loading ? 'Saving...' : undefined}
@@ -3241,7 +3262,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                 <X size={20} className="text-slate-400" />
               </button>
             </div>
-            
+
             <form onSubmit={handleAddProduct} className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
               <div className="bg-brand-light border border-brand-border p-3 rounded-xl flex items-center gap-3">
                 <Barcode size={20} className="text-brand" />
@@ -3255,11 +3276,11 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                   <label htmlFor="pName" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Product Name</label>
                   <input id="pName" name="pName" required type="text" placeholder="Enter product name" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium" />
                 </div>
-                
+
                 <div className="space-y-1.5">
                   <label htmlFor="pCat" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Category</label>
-                  <select 
-                    id="pCat" 
+                  <select
+                    id="pCat"
                     name="pCat"
                     required
                     onChange={(e) => setIsAddingNewCategory(e.target.value === 'New')}
@@ -3299,7 +3320,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                     <input id="newCat" name="newCat" required type="text" placeholder="Enter category name..." className="w-full px-4 py-2.5 bg-brand-light border border-brand-border rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium" />
                   </div>
                 )}
-                
+
                 <div className="space-y-1.5">
                   <label htmlFor="pCost" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Cost Price</label>
                   <div className="relative">
@@ -3328,14 +3349,14 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
               </div>
 
               <div className="pt-6 flex gap-3 sticky bottom-0 bg-white">
-                <button 
+                <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
                   className="flex-1 py-3 bg-white border border-slate-200 text-slate-500 rounded-xl font-bold hover:bg-slate-50 transition-all"
                 >
                   CANCEL
                 </button>
-                <button 
+                <button
                   type="submit"
                   disabled={loading}
                   title={loading ? 'Saving product...' : undefined}
