@@ -244,8 +244,7 @@ export default function App() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState('Walk-in Customer');
   const [paymentMethod, setPaymentMethod] = useState('CASH');
-  const [customerContact, setCustomerContact] = useState('');
-  const [transferId, setTransferId] = useState('');
+  // customerContact and transferId are captured post-sale in the post-capture modal
   const [currentUser] = useState('Admin');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -254,6 +253,10 @@ export default function App() {
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [lastBill, setLastBill] = useState<Bill | null>(null);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [postCaptureOpen, setPostCaptureOpen] = useState(false);
+  const [postCustomerContact, setPostCustomerContact] = useState('');
+  const [postTransferId, setPostTransferId] = useState('');
+  const [postSaving, setPostSaving] = useState(false);
   const receiptRef = useRef<HTMLDivElement>(null);
   const [returnToTab, setReturnToTab] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -262,6 +265,38 @@ export default function App() {
     contentRef: receiptRef,
     documentTitle: `Bill_${lastBill?.BillNo || 'Receipt'}`,
   });
+
+  // Save captured contact & transfer ID to the bill row using the new backend endpoint
+  const handleSavePostCapture = useCallback(async () => {
+    if (!lastBill) return;
+    setPostSaving(true);
+    try {
+      const payload = {
+        action: 'updateBillContact',
+        billNo: lastBill.BillNo,
+        customerContact: postCustomerContact || '',
+        transferId: postTransferId || ''
+      };
+      const res = await fetch(WEB_APP_URL, { method: 'POST', body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (data && data.success) {
+        // update local lastBill so UI reflects saved values
+        setLastBill(prev => prev ? ({ ...prev, CustomerContact: postCustomerContact, TransferId: postTransferId }) : prev);
+        setMessage({ type: 'success', text: `Contact and transaction saved for ${lastBill.BillNo}` });
+        // refresh dashboard/products in background
+        try { await fetchDashboardData(); } catch (e) { console.debug('refresh after post-capture failed', e); }
+        setPostCaptureOpen(false);
+        setShowReceipt(false);
+      } else {
+        throw new Error(data && data.error ? data.error : 'Failed to save contact');
+      }
+    } catch (err: any) {
+      console.error('Failed to save post-capture data', err);
+      setMessage({ type: 'error', text: `Failed to save contact: ${err && err.message ? err.message : err}` });
+    } finally {
+      setPostSaving(false);
+    }
+  }, [lastBill, postCustomerContact, postTransferId]);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -463,9 +498,8 @@ export default function App() {
         action: 'saveBill',
         billNo,
         customerName,
-        customerContact: customerContact || undefined,
         method: paymentMethod,
-        transferId: transferId || undefined,
+        // Note: contact & transfer ID are captured post-sale via updateBillContact
         user: currentUser,
         lines: cart.map(item => ({
           itemId: item.ID,
@@ -491,8 +525,6 @@ export default function App() {
           BillNo: billNo!,
           DateTime: new Date().toISOString(),
           CustomerName: customerName,
-          CustomerContact: customerContact,
-          TransferId: transferId,
           Method: paymentMethod,
           User: currentUser,
           Subtotal: subtotal,
@@ -513,6 +545,7 @@ export default function App() {
           }))
         });
         setShowReceipt(true);
+  // Post-capture inputs are left empty by default; user may fill them after receipt
         resetPOS();
         // Refresh products and dashboard so UI reflects edits immediately
         try {
@@ -1123,22 +1156,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="space-y-1.5">
-                          <label htmlFor="customerContact" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Customer Contact</label>
-                          <div className="relative">
-                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
-                              <Phone size={16} />
-                            </div>
-                            <input
-                              id="customerContact"
-                              type="text"
-                              placeholder="Phone or email (optional)"
-                              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium"
-                              value={customerContact}
-                              onChange={(e) => setCustomerContact(e.target.value)}
-                            />
-                          </div>
-                        </div>
+                        {/* Customer contact removed from inline checkout; captured post-sale */}
 
                         <div className="space-y-1.5">
                           <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Payment Method</label>
@@ -1171,19 +1189,7 @@ export default function App() {
                         </div>
 
                         {/* Transfer / transaction ID for non-cash payments */}
-                        {paymentMethod !== 'CASH' && (
-                          <div className="space-y-1.5">
-                            <label htmlFor="transferId" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Transaction ID</label>
-                            <input
-                              id="transferId"
-                              type="text"
-                              placeholder="Bank transfer / transaction ID"
-                              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium"
-                              value={transferId}
-                              onChange={(e) => setTransferId(e.target.value)}
-                            />
-                          </div>
-                        )}
+                        {/* Transaction ID removed from inline checkout; captured post-sale */}
                       </div>
 
                       <div className="h-px bg-slate-100" />
@@ -1310,11 +1316,44 @@ export default function App() {
                   PRINT RECEIPT
                 </button>
                 <button
-                  onClick={() => setShowReceipt(false)}
+                  onClick={() => setPostCaptureOpen(true)}
                   className="w-full py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all"
                 >
                   DONE
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POST-SALE CAPTURE MODAL: collect contact & transfer id after receipt */}
+      {postCaptureOpen && lastBill && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800">Capture Contact & Transaction</h3>
+              <button onClick={() => { setPostCaptureOpen(false); setShowReceipt(false); }} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                <X size={20} className="text-slate-400" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-500">Enter customer contact (phone/email) and bank transfer transaction ID for bill <span className="font-bold">{lastBill.BillNo}</span>.</p>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Customer Contact</label>
+                <input type="text" value={postCustomerContact} onChange={(e) => setPostCustomerContact(e.target.value)} placeholder="Phone or email (optional)" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium" />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Transaction ID</label>
+                <input type="text" value={postTransferId} onChange={(e) => setPostTransferId(e.target.value)} placeholder="Bank transfer / transaction ID (optional)" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium" />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button onClick={() => { setPostCaptureOpen(false); setShowReceipt(false); }} className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all">Skip</button>
+                <button onClick={handleSavePostCapture} disabled={postSaving} className={cn("flex-1 py-3 rounded-xl font-bold shadow-lg shadow-brand-light flex items-center justify-center gap-2 transition-all", postSaving ? 'bg-brand text-white opacity-60 cursor-not-allowed' : 'bg-brand text-white hover:bg-brand-hover')}>{postSaving ? 'Saving...' : 'Save & Close'}</button>
               </div>
             </div>
           </div>

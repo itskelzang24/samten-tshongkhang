@@ -123,6 +123,8 @@ function doPost(e) {
         return jsonResponse(addCategory(body));
       case 'saveProduct':
         return jsonResponse(saveProduct(body));
+      case 'updateBillContact':
+        return jsonResponse(updateBillContact(body));
       case 'updatePermissions':
         return jsonResponse(updatePermissions(body));
       case 'updateConfig':
@@ -328,7 +330,7 @@ function normalizeLineObjectFromRow(row, index) {
     ItemName: getField(row, index, 'ItemName', 4),
     Qty: toNumberSafe(getField(row, index, 'Qty', 5)),
     Rate: toNumberSafe(getField(row, index, 'Rate', 6)),
-    UnitCost: toNumberSafe(getField(row, index, 'UnitCost', index && index.LineType !== undefined ? '' : 7)),
+    UnitCost: toNumberSafe(getField(row, index, 'UnitCost', 7)),
     LineType: getField(row, index, 'LineType', 7),
     GST_Rate: toNumberSafe(getField(row, index, 'GST_Rate', 8)),
     GST_Amount: toNumberSafe(getField(row, index, 'GST_Amount', 9)),
@@ -1011,6 +1013,68 @@ function reopenBill(body) {
   return { success: false, error: 'Bill not found' };
 }
 
+// Update only CustomerContact and TransferId for an existing bill without
+// touching lines or reversing stock. Safe to call after a sale completes.
+function updateBillContact(body) {
+  const billNo = body && (body.billNo || body.BillNo) ? String(body.billNo || body.BillNo) : null;
+  const customerContact = body && body.customerContact !== undefined ? body.customerContact : (body.CustomerContact !== undefined ? body.CustomerContact : '');
+  const transferId = body && body.transferId !== undefined ? body.transferId : (body.TransferId !== undefined ? body.TransferId : '');
+  if (!billNo) return { success: false, error: 'billNo required' };
+
+  const sheet = getSheet(SHEET_NAMES.SALES_BILLS);
+  if (!sheet) return { success: false, error: 'Sales_Bills sheet not found' };
+
+  // Ensure canonical headers exist so we can find columns reliably
+  ensureBillHeaders();
+
+  const values = getSheetValues(SHEET_NAMES.SALES_BILLS);
+  if (!values.length || values.length < 2) return { success: false, error: 'No bills present' };
+  const headers = values[0] || [];
+  const idx = buildHeaderIndex(headers);
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const rowBillNo = getField(row, idx, 'BillNo', 0);
+    if (String(rowBillNo) === String(billNo)) {
+      const sheetRow = i + 1;
+      const lastCol = Math.max(headers.length, sheet.getLastColumn() || 12);
+      const existing = sheet.getRange(sheetRow, 1, 1, lastCol).getValues()[0];
+
+      if (idx['CustomerContact'] !== undefined) {
+        existing[idx['CustomerContact']] = customerContact;
+      } else {
+        // try to find a fuzzy header index for contact
+        for (let c = 0; c < headers.length; c++) {
+          const h = normalizeKey(headers[c]);
+          if (h.indexOf('contact') !== -1 || h.indexOf('phone') !== -1 || h.indexOf('mobile') !== -1) {
+            existing[c] = customerContact; break;
+          }
+        }
+      }
+
+      if (idx['TransferId'] !== undefined) {
+        existing[idx['TransferId']] = transferId;
+      } else {
+        for (let c = 0; c < headers.length; c++) {
+          const h = normalizeKey(headers[c]);
+          if (h.indexOf('trans') !== -1 || h.indexOf('txn') !== -1 || h.indexOf('transfer') !== -1) {
+            existing[c] = transferId; break;
+          }
+        }
+      }
+
+      // UpdatedAt if present
+      if (idx['UpdatedAt'] !== undefined) existing[idx['UpdatedAt']] = new Date();
+
+      sheet.getRange(sheetRow, 1, 1, existing.length).setValues([existing]);
+      clearExecutionCache(SHEET_NAMES.SALES_BILLS);
+      return { success: true, billNo: billNo };
+    }
+  }
+
+  return { success: false, error: 'Bill not found' };
+}
+
 /* =========================
    STOCK / LEDGER
 ========================= */
@@ -1347,3 +1411,7 @@ function clearCaches(body) {
   });
   return { success: true, removed: keys };
 }
+
+
+
+ 
