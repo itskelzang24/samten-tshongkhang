@@ -1814,7 +1814,7 @@ function DashboardTab({ data, onRefresh, onGoToInventory, userRole }: { data: an
 
   // Non-admin (staff) simplified dashboard: show only stock alerts, total transactions, and total items sold
   if (userRole && userRole !== 'ADMIN') {
-    const lowStockArr = lowStock;
+    const lowStockArr = lowStock || [];
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
         <div className="flex justify-between items-center">
@@ -1832,6 +1832,32 @@ function DashboardTab({ data, onRefresh, onGoToInventory, userRole }: { data: an
             <span className="text-xs text-slate-500 uppercase font-bold">Stock Alerts</span>
             <span className="text-2xl font-black text-slate-900 mt-2">{lowStockArr.length}</span>
             <span className="text-[11px] text-slate-400 mt-2">Items at or below minimum stock</span>
+
+            {lowStockArr.length > 0 ? (
+              <ul className="mt-3 text-sm space-y-1">
+                {lowStockArr.slice(0, 8).map((p, i) => {
+                  const stock = Number(p.Stock || 0);
+                  const min = Number(p.MinStock || 0);
+                  const healthy = stock > min;
+                  const pillClass = healthy ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800';
+                  const pillLabel = healthy ? 'OK' : (stock <= 0 ? 'OUT' : 'LOW');
+                  return (
+                    <li key={i} className="flex items-center justify-between text-slate-700">
+                      <span className="truncate pr-2">{p.Name || p.ID || '(Unnamed Item)'}</span>
+                      <div className="flex items-center space-x-2">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${pillClass}`}>{pillLabel}</span>
+                        <span className="text-xs text-slate-500">{stock} / {min}</span>
+                      </div>
+                    </li>
+                  );
+                })}
+                {lowStockArr.length > 8 ? (
+                  <li className="text-xs text-slate-400">and {lowStockArr.length - 8} more...</li>
+                ) : null}
+              </ul>
+            ) : (
+              <div className="mt-3 text-sm text-slate-500">No low-stock items</div>
+            )}
           </div>
 
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col">
