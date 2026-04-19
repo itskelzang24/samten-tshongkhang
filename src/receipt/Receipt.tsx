@@ -1,5 +1,3 @@
-import React from 'react';
-
 export type ReceiptItem = {
   name: string;
   qty: number;
@@ -21,26 +19,29 @@ export type ReceiptData = {
 
 const CSS = `
 /* Scoped receipt styles to avoid modifying host page */
-.receipt-root { font-family: 'Courier New', monospace; color:#000; }
-.receipt-root * { box-sizing: border-box; }
+.receipt-root { font-family: Calibri, 'Segoe UI', Arial, sans-serif; color:#000; line-height:1.5; }
+.receipt-root * { box-sizing: border-box; color:#000; }
 .receipt{width:72mm;padding:6px 6px 12px;box-sizing:border-box}
 .center{text-align:center}
-.header{font-weight:700;letter-spacing:0.5px}
-.muted{color:#444;font-size:11px}
-.divider{border-top:1px dashed #222;margin:8px 0}
-.bill-info{font-size:12px;margin-bottom:6px}
-.bill-info .row{display:flex;justify-content:space-between}
+.header{font-weight:700;letter-spacing:0.5px;font-size:18px}
+.subheader{font-size:13px}
+.divider{border-top:1px dashed #222;margin:10px 0}
+.bill-info{font-size:12px;margin-bottom:8px}
+.bill-info .row{display:flex;justify-content:space-between;padding:2px 0}
 .items{width:100%;border-collapse:collapse;font-size:12px}
-.items thead th{font-size:11px;text-align:left;padding:4px 0}
-.items tbody td{padding:2px 0;vertical-align:top}
+.items thead th{font-size:11px;padding:6px 0 4px}
+.items thead th.col-item{text-align:left}
+.items thead th.col-qty{text-align:right}
+.items thead th.col-total{text-align:right}
+.items tbody td{padding:4px 0;vertical-align:top}
 .col-item{width:58%;word-break:break-word}
 .col-qty{width:12%;text-align:right;padding-left:6px}
 .col-total{width:30%;text-align:right;padding-left:6px}
-.price-note{font-size:10px;color:#444}
-.totals{margin-top:6px}
-.totals .row{display:flex;justify-content:space-between;padding:2px 0}
-.grand{font-weight:800;font-size:16px;margin-top:6px}
-.footer{margin-top:8px;font-size:11px;text-align:center;color:#333}
+.price-note{font-size:10px;padding-bottom:4px}
+.totals{margin-top:8px}
+.totals .row{display:flex;justify-content:space-between;padding:3px 0}
+.grand{font-weight:800;font-size:16px;margin-top:8px}
+.footer{margin-top:10px;font-size:11px;text-align:center}
 @page{size:80mm auto;margin:0}
 @media print{
   .receipt-root{width:72mm;}
@@ -89,15 +90,15 @@ export function generateReceiptHtml(data: ReceiptData) {
     <div class="receipt-root">
       <div class="receipt" role="document">
   <div class="center header">Samten Tshongkhang</div>
-  <div class="center muted">Sunday Market, Thimphu</div>
-  <div class="center muted">Phone: +975 17655336 / +975 17909608</div>
+  <div class="center subheader">Sunday Market, Thimphu</div>
+  <div class="center subheader">Phone: +975 17655336 / +975 17909608</div>
       <div class="divider"></div>
 
       <div class="bill-info">
-        <div class="row"><div>Bill No</div><div>${escapeHtml(data.bill_no)}</div></div>
-        <div class="row"><div>Date / Time</div><div>${escapeHtml(data.date)}</div></div>
-        <div class="row"><div>Customer</div><div>${escapeHtml(data.customer)}</div></div>
-        <div class="row"><div>User</div><div>${escapeHtml(data.user)}</div></div>
+        <div class="row"><div>Bill No:</div><div>${escapeHtml(data.bill_no)}</div></div>
+        <div class="row"><div>Date / Time:</div><div>${escapeHtml(data.date)}</div></div>
+        <div class="row"><div>Customer:</div><div>${escapeHtml(data.customer)}</div></div>
+        <div class="row"><div>User:</div><div>${escapeHtml(data.user)}</div></div>
       </div>
 
       <div class="divider"></div>
@@ -126,7 +127,7 @@ export function generateReceiptHtml(data: ReceiptData) {
 
       <div class="divider"></div>
 
-      <div class="footer">Thank you for shopping with us<br/>Powered by Samten Inventory System</div>
+      <div class="footer">Thank you for shopping with us.</div>
       </div>
     </div>
   </body>
@@ -174,76 +175,3 @@ export async function printReceipt(data: ReceiptData, autoClose = true) {
     setTimeout(tryPrint, 500);
   }
 }
-
-export const ReceiptView: React.FC<{ data: ReceiptData }> = ({ data }) => {
-  // Render same structure as printed HTML so preview matches print
-  return (
-    <div className="receipt-root">
-      <style>{CSS}</style>
-      <div className="receipt" role="document">
-  <div className="center header">Samten Tshongkhang</div>
-  <div className="center muted">Sunday Market, Thimphu</div>
-  <div className="center muted">Phone: +975 17655336 / +975 17909608</div>
-        <div className="divider" />
-
-        <div className="bill-info">
-          <div className="row"><div>Bill No</div><div>{data.bill_no}</div></div>
-          <div className="row"><div>Date / Time</div><div>{data.date}</div></div>
-          <div className="row"><div>Customer</div><div>{data.customer}</div></div>
-          <div className="row"><div>User</div><div>{data.user}</div></div>
-        </div>
-
-        <div className="divider" />
-
-        <table className="items" aria-label="Items">
-          <thead>
-            <tr><th className="col-item">Item</th><th className="col-qty">Qty</th><th className="col-total">Total</th></tr>
-          </thead>
-          <tbody>
-            {data.items.map((it, idx) => (
-              <React.Fragment key={idx}>
-                <tr>
-                  <td className="col-item">{it.name}</td>
-                  <td className="col-qty">{it.qty}</td>
-                  <td className="col-total">{formatMoney(it.qty * it.price)}</td>
-                </tr>
-                <tr>
-                  <td colSpan={3} className="price-note">{formatMoney(it.price)}{it.gst ? ' + GST' : ''}</td>
-                </tr>
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="divider" />
-
-        <div className="totals">
-          <div className="row"><div>Subtotal</div><div>{formatMoney(data.subtotal)}</div></div>
-          <div className="row"><div>GST Total</div><div>{formatMoney(data.gst_total)}</div></div>
-          <div className="divider" />
-          <div className="row grand"><div>GRAND TOTAL</div><div>{formatMoney(data.grand_total)}</div></div>
-        </div>
-
-        <div className="divider" />
-
-        <div className="center">PAID VIA {data.payment_method}</div>
-
-        <div className="divider" />
-
-        <div className="footer">Thank you for shopping with us<br/>Powered by Samten Inventory System</div>
-      </div>
-    </div>
-  );
-};
-
-export const ReceiptPreview: React.FC<{ data: ReceiptData }> = ({ data }) => {
-  return (
-    <div>
-      <div style={{ border: '1px solid #ddd', display: 'inline-block' }}>
-        <ReceiptView data={data} />
-      </div>
-    </div>
-  );
-};
-
-export default ReceiptView;

@@ -1,7 +1,7 @@
 /* Thermal receipt CSS - designed for 80mm paper, 72mm printable width */
-:root{--receipt-width:72mm;--font-family: 'Courier New', monospace;--font-size:12px}
+:root{--receipt-width:72mm;--font-family: Calibri, 'Segoe UI', Arial, sans-serif;--font-size:12px}
 html,body{margin:0;padding:0}
-.receipt-root{font-family:var(--font-family);font-size:var(--font-size);color:#000}
+.receipt-root{font-family:var(--font-family);font-size:var(--font-size);color:#000;line-height:1.5}
 .receipt{
   width:var(--receipt-width);
   margin:0 auto;
@@ -9,26 +9,29 @@ html,body{margin:0;padding:0}
   box-sizing:border-box;
 }
 .receipt .center{text-align:center}
-.receipt .header{font-weight:700;letter-spacing:0.5px}
-.receipt .muted{color:#444;font-size:11px}
-.receipt .divider{border-top:1px dashed #222;margin:8px 0}
-.receipt .bill-info{font-size:12px;margin-bottom:6px}
-.receipt .bill-info .row{display:flex;justify-content:space-between}
+.receipt .header{font-weight:700;letter-spacing:0.5px;font-size:18px}
+.receipt .subheader{font-size:13px}
+.receipt .divider{border-top:1px dashed #000;margin:10px 0}
+.receipt .bill-info{font-size:12px;margin-bottom:8px}
+.receipt .bill-info .row{display:flex;justify-content:space-between;padding:2px 0}
 
 /* Item table - fixed layout to avoid shifting */
 .receipt .items{width:100%;border-collapse:collapse;font-size:12px}
-.receipt .items thead th{font-size:11px;text-align:left;padding:4px 0}
-.receipt .items tbody td{padding:2px 0;vertical-align:top}
+.receipt .items thead th{font-size:11px;padding:6px 0 4px}
+.receipt .items thead th.col-item{text-align:left}
+.receipt .items thead th.col-qty{text-align:right}
+.receipt .items thead th.col-total{text-align:right}
+.receipt .items tbody td{padding:4px 0;vertical-align:top}
 .receipt .col-item{width:58%;word-break:break-word}
 .receipt .col-qty{width:12%;text-align:right;padding-left:6px}
 .receipt .col-total{width:30%;text-align:right;padding-left:6px}
-.receipt .price-note{font-size:10px;color:#444}
+.receipt .price-note{font-size:10px;padding-bottom:4px}
 
-.receipt .totals{margin-top:6px}
-.receipt .totals .row{display:flex;justify-content:space-between;padding:2px 0}
-.receipt .grand{font-weight:800;font-size:16px;margin-top:6px}
+.receipt .totals{margin-top:8px}
+.receipt .totals .row{display:flex;justify-content:space-between;padding:3px 0}
+.receipt .grand{font-weight:800;font-size:16px;margin-top:8px}
 
-.receipt .footer{margin-top:8px;font-size:11px;text-align:center;color:#333}
+.receipt .footer{margin-top:10px;font-size:11px;text-align:center}
 
 /* Make sure print page matches preview exactly */
 @page{size:80mm auto;margin:0}

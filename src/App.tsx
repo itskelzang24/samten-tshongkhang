@@ -51,8 +51,8 @@ import { twMerge } from 'tailwind-merge';
 import { format } from 'date-fns';
 // Lazy-load barcode to reduce initial bundle size and speed up first paint
 const BarcodeComponent = React.lazy(() => import('react-barcode'));
-import * as XLSX from 'xlsx';
 import { useReactToPrint } from 'react-to-print';
+import { printReceipt } from './receipt/Receipt';
 
 /**
  * UTILITIES
@@ -61,8 +61,8 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Placeholder for the Web App URL - the user will replace this or we use the provided one
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyJQ4PkVvuauaYKX-cqOzUOeYKA_d7Nlhy-FIqxkPAPhfleVQsIFId43SFXdPgjjgdl2g/exec';
+// API base URL — points to our Express + Neon PostgreSQL server
+const WEB_APP_URL = 'http://localhost:3001/api';
 
 /**
  * TYPES
@@ -257,14 +257,8 @@ export default function App() {
   const [postCustomerContact, setPostCustomerContact] = useState('');
   const [postTransferId, setPostTransferId] = useState('');
   const [postSaving, setPostSaving] = useState(false);
-  const receiptRef = useRef<HTMLDivElement>(null);
   const [returnToTab, setReturnToTab] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const handlePrint = useReactToPrint({
-    contentRef: receiptRef,
-    documentTitle: `Bill_${lastBill?.BillNo || 'Receipt'}`,
-  });
 
   // Save captured contact & transfer ID to the bill row using the new backend endpoint
   const handleSavePostCapture = useCallback(async () => {
@@ -547,16 +541,11 @@ export default function App() {
         setShowReceipt(true);
   // Post-capture inputs are left empty by default; user may fill them after receipt
         resetPOS();
-        // Refresh products and dashboard so UI reflects edits immediately
+        // Refresh products and dashboard in parallel so UI reflects edits immediately
         try {
-          await fetchProducts();
+          await Promise.all([fetchProducts(), fetchDashboardData()]);
         } catch (e) {
-          console.error('Failed to refresh products after save', e);
-        }
-        try {
-          await fetchDashboardData();
-        } catch (e) {
-          console.error('Failed to refresh dashboard after save', e);
+          console.error('Failed to refresh after save', e);
         }
         // If we were editing from another tab (e.g., Financials), return there after completing
         if (returnToTab) {
@@ -743,7 +732,12 @@ export default function App() {
 
   const isAllowed = (tab: string) => {
     if (user.role === 'ADMIN') return true;
-    return config?.staff_perms?.[tab] ?? false;
+    // If staff_perms is empty or the tab hasn't been explicitly configured,
+    // default to allowing core tabs for staff users.
+    const defaultStaffTabs: Record<string, boolean> = { dashboard: true, pos: true, financials: true, inventory: true };
+    const perms = config?.staff_perms;
+    if (!perms || Object.keys(perms).length === 0) return defaultStaffTabs[tab] ?? false;
+    return perms[tab] ?? false;
   };
 
   return (
@@ -1274,7 +1268,7 @@ export default function App() {
             )}
 
             {activeTab === 'inventory' && isAllowed('inventory') && (
-              <InventoryTab currentUser={currentUser} onRefresh={async () => { await fetchProducts(); await fetchDashboardData(); }} products={products} />
+              <InventoryTab currentUser={currentUser} onRefresh={async () => { await Promise.all([fetchProducts(), fetchDashboardData()]); }} products={products} />
             )}
 
             {activeTab === 'setup' && user.role === 'ADMIN' && (
@@ -1309,7 +1303,17 @@ export default function App() {
 
               <div className="mt-8 space-y-3">
                 <button
-                  onClick={() => handlePrint()}
+                  onClick={() => lastBill && printReceipt({
+                    bill_no: lastBill.BillNo,
+                    date: format(new Date(lastBill.DateTime), 'dd/MM/yyyy HH:mm'),
+                    customer: lastBill.CustomerName,
+                    user: lastBill.User,
+                    items: (lastBill.lines || []).map((l: any) => ({ name: l.ItemName, qty: l.Qty, price: l.Rate, gst: (l.GST_Rate || 0) > 0 })),
+                    subtotal: lastBill.Subtotal,
+                    gst_total: lastBill.GSTTotal,
+                    grand_total: lastBill.GrandTotal,
+                    payment_method: lastBill.Method,
+                  })}
                   className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-xl shadow-slate-200"
                 >
                   <Printer size={20} />
@@ -1360,93 +1364,7 @@ export default function App() {
         </div>
       )}
 
-      {/* PRINT-ONLY RECEIPT LAYOUT */}
-      <div className="fixed -left-[9999px] top-0 pointer-events-none bg-white">
-        <div ref={receiptRef} className="p-8 font-mono text-sm w-[80mm] bg-white text-black">
-          <div className="text-center space-y-1 mb-6">
-            <h2 className="text-xl font-bold">Samten Tshongkhang</h2>
-            <p className="text-xs">Sunday Market, Thimphu</p>
-            <p className="text-xs">Phone: +975 17655336 / +975 17909608</p>
-          </div>
 
-          <div className="border-y border-dashed py-2 mb-4 space-y-1">
-            <div className="flex justify-between">
-              <span>Bill No:</span>
-              <span className="font-bold">{lastBill?.BillNo}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Date:</span>
-              <span>{lastBill && format(new Date(lastBill.DateTime), 'dd/MM/yyyy HH:mm')}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Customer:</span>
-              <span>{lastBill?.CustomerName}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>User:</span>
-              <span>{lastBill?.User}</span>
-            </div>
-            {lastBill?.CustomerContact && (
-              <div className="flex justify-between">
-                <span>Contact:</span>
-                <span>{lastBill?.CustomerContact}</span>
-              </div>
-            )}
-            {lastBill?.TransferId && (
-              <div className="flex justify-between">
-                <span>Txn ID:</span>
-                <span>{lastBill?.TransferId}</span>
-              </div>
-            )}
-          </div>
-
-          <table className="w-full mb-4">
-            <thead>
-              <tr className="border-b border-dashed text-left">
-                <th className="pb-1">Item</th>
-                <th className="pb-1 text-center">Qty</th>
-                <th className="pb-1 text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lastBill?.lines?.map((line, i) => (
-                <tr key={i} className="align-top">
-                  <td className="py-1">
-                    {line.ItemName}
-                    {line.LineType === 'RETURN' && <span className="ml-1 text-[10px] font-bold">(RET)</span>}
-                    <div className="text-[10px]">Nu. {line.Rate.toFixed(2)} + GST</div>
-                  </td>
-                  <td className="py-1 text-center">{line.Qty}</td>
-                  <td className="py-1 text-right">
-                    {line.LineType === 'RETURN' && '-'}Nu. {line.LineTotal.toFixed(2)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="border-t border-dashed pt-2 space-y-1">
-            <div className="flex justify-between">
-              <span>Subtotal:</span>
-              <span>Nu. {lastBill?.Subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>GST Total:</span>
-              <span>Nu. {lastBill?.GSTTotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-lg font-bold pt-2 border-t border-dashed">
-              <span>GRAND TOTAL:</span>
-              <span>Nu. {lastBill?.GrandTotal.toFixed(2)}</span>
-            </div>
-          </div>
-
-          <div className="mt-6 text-center border-t border-dashed pt-4">
-            <p className="font-bold uppercase tracking-widest">Paid via {lastBill?.Method}</p>
-            <p className="text-[10px] mt-4">Thank you for shopping with us!</p>
-            <p className="text-[8px] mt-1">Powered by Samten Inventory System</p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1476,19 +1394,19 @@ function LoginScreen({ onLogin, fetchConfig, prefetchFinancials }: { onLogin: (u
     setLoading(true);
     setError('');
 
-    // Simulate network delay for a better feel
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    if (username === 'admin' && password === 'Admin@123$') {
-      const u: UserProfile = { username: 'Admin', role: 'ADMIN' };
-      onLogin(u);
-      fetchConfig();
-    } else if (username === 'staff' && password === 'Staff@123$') {
-      const u: UserProfile = { username: 'Staff', role: 'STAFF' };
-      onLogin(u);
-      fetchConfig();
-    } else {
-      setError('Invalid username or password');
+    try {
+      const res = await fetch(`${WEB_APP_URL}?action=login&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
+      const data = await res.json();
+      if (data && data.success && data.user) {
+        const u: UserProfile = { username: data.user.username, role: data.user.role };
+        onLogin(u);
+        fetchConfig();
+      } else {
+        setError(data?.error || 'Invalid username or password');
+        setLoading(false);
+      }
+    } catch (err: any) {
+      setError('Login failed: ' + (err?.message || String(err)));
       setLoading(false);
     }
   };
@@ -2217,7 +2135,8 @@ function FinancialsTab({ onEdit, onNotify, prefetchedBills }: { onEdit: (billNo:
     }
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import('xlsx');
     // Ensure DateTime is exported in a consistent local format so Excel shows the
     // correct transaction time (avoid timezone/ISO string mismatches).
     const exportData = bills.map(b => ({
@@ -2853,7 +2772,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
   const [editAction, setEditAction] = useState<'update' | 'restock'>('update');
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
+  const [selectedCat, setSelectedCat] = useState('');
   const [barcodeToPrint, setBarcodeToPrint] = useState<string | null>(null);
   const barcodeRef = useRef<HTMLDivElement>(null);
   const [printProduct, setPrintProduct] = useState<Product | null>(null);
@@ -2922,7 +2841,8 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
     setBarcodeToPrint(id);
   }, []);
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import('xlsx');
     const worksheet = XLSX.utils.json_to_sheet(products);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory");
@@ -2949,7 +2869,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
 
     const form = e.currentTarget as HTMLFormElement;
     const formData = new FormData(form);
-    const categoryRaw = isAddingNewCategory ? (formData.get('newCat') as string) : (formData.get('pCat') as string);
+    const categoryRaw = formData.get('pCat') as string;
     const category = categoryRaw && categoryRaw.trim() ? categoryRaw.trim() : 'General';
 
     const parseNum = (v: FormDataEntryValue | null, fallback = 0) => {
@@ -3002,7 +2922,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
         }
 
         setShowAddModal(false);
-        setIsAddingNewCategory(false);
+        setSelectedCat('');
         try { await onRefresh(); } catch (e) { console.error('onRefresh failed', e); }
         fetchCategories();
       } else {
@@ -3025,12 +2945,14 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
     try {
       const res = await fetch(WEB_APP_URL, {
         method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ action: 'addCategory', categoryName })
       });
       const data = await res.json();
       if (data.success) {
         setShowAddCategoryModal(false);
-        fetchCategories();
+        await fetchCategories();
+        setSelectedCat(categoryName);
       }
     } catch (err) {
       console.error(err);
@@ -3079,13 +3001,6 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
           >
             <Save size={18} />
             EXPORT EXCEL
-          </button>
-          <button
-            onClick={() => setShowAddCategoryModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all active:scale-[0.98]"
-          >
-            <Plus size={18} />
-            ADD CATEGORY
           </button>
           <button
             onClick={() => setShowAddModal(true)}
@@ -3273,7 +3188,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
 
       {/* ADD CATEGORY MODAL */}
       {showAddCategoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center">
               <h3 className="font-bold text-slate-800">Add New Category</h3>
@@ -3348,7 +3263,14 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                     id="pCat"
                     name="pCat"
                     required
-                    onChange={(e) => setIsAddingNewCategory(e.target.value === 'New')}
+                    value={selectedCat}
+                    onChange={(e) => {
+                      if (e.target.value === 'New') {
+                        setShowAddCategoryModal(true);
+                      } else {
+                        setSelectedCat(e.target.value);
+                      }
+                    }}
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium"
                   >
                     <option value="">Select Category</option>
@@ -3379,12 +3301,6 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                   <input id="pBill" name="pBill" type="text" placeholder="e.g. P-INV-001" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium" />
                 </div>
 
-                {isAddingNewCategory && (
-                  <div className="space-y-1.5 sm:col-span-2 animate-in slide-in-from-top-2 duration-200">
-                    <label htmlFor="newCat" className="text-[10px] font-bold uppercase text-brand tracking-wider">New Category Name</label>
-                    <input id="newCat" name="newCat" required type="text" placeholder="Enter category name..." className="w-full px-4 py-2.5 bg-brand-light border border-brand-border rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium" />
-                  </div>
-                )}
 
                 <div className="space-y-1.5">
                   <label htmlFor="pCost" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Cost Price</label>

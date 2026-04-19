@@ -109,8 +109,6 @@ export function generateEscPos(data: ReceiptData) {
   cmds.push(new Uint8Array([LF, LF]));
 
   cmds.push(strToBytes('Thank you for shopping with us'));
-  cmds.push(new Uint8Array([LF]));
-  cmds.push(strToBytes('Powered by Samten Inventory System'));
   cmds.push(new Uint8Array([LF, LF]));
 
   // Cut paper (partial)

@@ -6,3 +6,17 @@
   --color-brand-light: #fef2f2;
   --color-brand-border: #fee2e2;
 }
+
+@page {
+  size: 80mm auto;
+  margin: 0;
+  padding: 0;
+}
+
+@media print {
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+  }
+}
