@@ -1,10 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import sql from './db';
 import crypto from 'crypto';
-
-dotenv.config({ path: __dirname + '/../.env' });
 
 const app = express();
 app.use(cors());
