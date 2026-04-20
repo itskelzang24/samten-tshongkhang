@@ -61,8 +61,8 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// API base URL — points to our Express + Neon PostgreSQL server
-const WEB_APP_URL = 'http://localhost:3001/api';
+// API base URL — /api in production (Vercel), localhost in dev
+const WEB_APP_URL = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
 
 /**
  * TYPES

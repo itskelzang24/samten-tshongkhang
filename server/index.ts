@@ -312,8 +312,12 @@ function toLine(r: any) {
   return { BillNo: r.bill_no, LineId: r.line_id, DateTime: r.date_time, ItemID: r.item_id, ItemName: r.item_name, Qty: num(r.qty), Rate: num(r.rate), UnitCost: num(r.unit_cost), LineType: r.line_type, GST_Rate: num(r.gst_rate), GST_Amount: num(r.gst_amount), LineTotal: num(r.line_total), User: r.user, Status: r.status, UpdatedAt: r.updated_at };
 }
 
-/* ===== START ===== */
-app.listen(PORT, () => {
-  console.log(`✅ Samten API server running on http://localhost:${PORT}`);
-  console.log(`   Frontend should use: const WEB_APP_URL = 'http://localhost:${PORT}/api';`);
-});
+/* ===== START (local dev only — Vercel uses the export below) ===== */
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`✅ Samten API server running on http://localhost:${PORT}`);
+    console.log(`   Frontend should use: const WEB_APP_URL = 'http://localhost:${PORT}/api';`);
+  });
+}
+
+export default app;

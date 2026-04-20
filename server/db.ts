@@ -1,7 +1,9 @@
 import { neon } from '@neondatabase/serverless';
 import dotenv from 'dotenv';
+import path from 'path';
 
-dotenv.config({ path: __dirname + '/../.env' });
+// Load .env for local dev; on Vercel env vars are injected automatically
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
