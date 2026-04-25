@@ -2810,19 +2810,18 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
   function renderSheetLabel(d: LabelData) {
     // Render a single 1.5in x 1in label block; if d contains productId, resolve product
     const prod = d.productId ? products.find(p => String(p.ID) === String(d.productId)) : null;
-    const name = prod ? prod.Name : (d.name || '');
     const price = prod ? `Nu. ${Number(prod.Selling).toFixed(2)}` : (d.price ? String(d.price) : '');
     const barcodeText = d.barcodeText || (prod ? String(prod.ID) : '');
     return (
-      <div key={barcodeText + name} style={{ width: '1.5in', height: '1.0in', boxSizing: 'border-box', border: '0.35pt solid #000', padding: '0.03in', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontFamily: 'Calibri, Arial, sans-serif', color: '#000' }}>
-        {/* Barcode (small), then compact name and price under it */}
+      <div key={barcodeText} style={{ width: '1.5in', height: '1.0in', boxSizing: 'border-box', border: '0.35pt solid #000', padding: '0.02in', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', fontFamily: 'Calibri, Arial, sans-serif', color: '#000' }}>
+        {/* Spacer grows to push barcode down toward bottom of label */}
+        <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
           <React.Suspense fallback={<div style={{height: 22}} />}>
             <BarcodeComponent value={barcodeText || ''} width={1} height={22} displayValue={false} margin={0} />
           </React.Suspense>
         </div>
-          <div style={{ textAlign: 'center', marginTop: '0.01in' }}>
-          <div style={{ fontSize: '8.5px', fontWeight: 700, lineHeight: '9px', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+        <div style={{ textAlign: 'center', marginTop: '0.01in', marginBottom: '0.01in' }}>
           <div style={{ fontSize: '8px', fontWeight: 700, lineHeight: '9px', color: '#0f172a' }}>{price}</div>
         </div>
       </div>
