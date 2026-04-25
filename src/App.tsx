@@ -2816,13 +2816,15 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
       <div key={barcodeText} style={{ width: '1.5in', height: '1.0in', boxSizing: 'border-box', border: '0.35pt solid #000', padding: '0.02in', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', fontFamily: 'Calibri, Arial, sans-serif', color: '#000' }}>
         {/* Spacer grows to push barcode down toward bottom of label */}
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
           <React.Suspense fallback={<div style={{height: 28}} />}>
             <BarcodeComponent value={barcodeText || ''} width={1} height={28} displayValue={false} margin={0} />
           </React.Suspense>
-        </div>
-        <div style={{ textAlign: 'center', marginTop: '0.01in', marginBottom: '0.01in' }}>
-          <div style={{ fontSize: '12px', fontWeight: 700, lineHeight: '13px', color: '#0f172a' }}>{price}</div>
+          {/* 12px spacing between barcode and price */}
+          <div style={{ height: '12px' }} />
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '20px', fontWeight: 700, lineHeight: '22px', color: '#0f172a' }}>{price}</div>
+          </div>
         </div>
       </div>
     );
@@ -3584,13 +3586,14 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                 <div style={{ flex: labelsPerSheet === 1 ? '0 0 auto' : 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', fontFamily: 'Calibri, Arial, sans-serif', color: '#000' }}>
                   {/* Spacer to push barcode down */}
                   <div style={{ flex: 1 }} />
-                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
                     <React.Suspense fallback={<div style={{height: 28}} />}>
                       <BarcodeComponent value={String(barcodeToPrint)} width={1} height={28} displayValue={false} margin={0} />
                     </React.Suspense>
-                  </div>
-                  <div style={{ marginTop: '0.01in', marginBottom: '0.01in', textAlign: 'center' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 700, lineHeight: '13px', color: '#0f172a' }}>Nu. {Number(prod.Selling).toFixed(2)}</div>
+                    <div style={{ height: '12px' }} />
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '20px', fontWeight: 700, lineHeight: '22px', color: '#0f172a' }}>Nu. {Number(prod.Selling).toFixed(2)}</div>
+                    </div>
                   </div>
                 </div>
               );
