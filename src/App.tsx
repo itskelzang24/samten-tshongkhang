@@ -3568,8 +3568,8 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
               if (idx % 2 === 0) {
                 const left = labelsToPrint[idx];
                 const right = labelsToPrint[idx + 1] || {};
-                acc.push(
-                  <div className="label-sheet" key={`sheet-${idx}`} style={{ width: '3.3in', height: '1.2in', display: 'flex', gap: '0.1in', padding: '0.05in 0.1in', boxSizing: 'border-box', alignItems: 'center', justifyContent: 'space-between' }}>
+                  acc.push(
+                  <div className="label-sheet" key={`sheet-${idx}`} style={{ width: '3.3in', height: '1.2in', display: 'flex', gap: '0.1in', padding: '0.05in 0.1in', boxSizing: 'border-box', alignItems: 'flex-end', justifyContent: 'space-between' }}>
                     {renderSheetLabel(left)}
                     {renderSheetLabel(right)}
                   </div>
@@ -3598,9 +3598,9 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                 </div>
               );
 
-              if (labelsPerSheet === 1) return <div style={{ width: '3.3in', height: '1.2in', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Label /></div>;
+              if (labelsPerSheet === 1) return <div style={{ width: '3.3in', height: '1.2in', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}><Label /></div>;
               return (
-                <div style={{ width: '3.3in', height: '1.2in', display: 'flex', gap: '0.1in', padding: '0.05in 0.1in', boxSizing: 'border-box', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ width: '3.3in', height: '1.2in', display: 'flex', gap: '0.1in', padding: '0.05in 0.1in', boxSizing: 'border-box', alignItems: 'flex-end', justifyContent: 'space-between' }}>
                   <Label />
                   <div style={{ width: '0.1cm', background: 'transparent' }} />
                   <Label />
