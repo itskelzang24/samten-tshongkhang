@@ -2777,6 +2777,9 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
   const barcodeRef = useRef<HTMLDivElement>(null);
   const [printProduct, setPrintProduct] = useState<Product | null>(null);
   const [labelsPerSheet, setLabelsPerSheet] = useState<number>(2); // 1 or 2 labels per physical sheet
+  // Labels batch printing: array of label objects. Each label may contain productId or explicit name/price/barcodeText
+  type LabelData = { productId?: string; name?: string; price?: string | number; meta?: string; barcodeText?: string };
+  const [labelsToPrint, setLabelsToPrint] = useState<LabelData[] | null>(null);
 
   // Inventory search state (search by ID or Name)
   const [inventorySearch, setInventorySearch] = useState('');
@@ -2791,6 +2794,36 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
   }, [inventorySearch, products]);
 
   const handlePrintBarcode = useReactToPrint({ contentRef: barcodeRef, documentTitle: `Barcode_${barcodeToPrint || 'Label'}` });
+
+  // Print an array of labels (two labels per sheet). This reuses the hidden barcode print area.
+  const printLabels = useCallback((labels: LabelData[]) => {
+    if (!labels || !labels.length) return;
+    setLabelsToPrint(labels);
+    // Give React a tick to render the print area
+    setTimeout(() => {
+      try { handlePrintBarcode(); } catch (e) { console.error('printLabels failed', e); }
+      // cleanup after a short delay
+      setTimeout(() => setLabelsToPrint(null), 500);
+    }, 250);
+  }, [handlePrintBarcode]);
+
+  function renderSheetLabel(d: LabelData) {
+    // Render a single 1.5in x 1in label block; if d contains productId, resolve product
+    const prod = d.productId ? products.find(p => String(p.ID) === String(d.productId)) : null;
+    const name = prod ? prod.Name : (d.name || '');
+    const price = prod ? `Nu. ${Number(prod.Selling).toFixed(2)}` : (d.price ? String(d.price) : '');
+    const barcodeText = d.barcodeText || (prod ? String(prod.ID) : '');
+    return (
+      <div key={barcodeText + name} style={{ width: '1.5in', height: '1.0in', boxSizing: 'border-box', border: '0.5pt solid #000', padding: '0.06in', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontFamily: 'Calibri, Arial, sans-serif', color: '#000' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <div style={{ fontSize: '13px', fontWeight: 600 }}>{name}</div>
+          <div style={{ fontSize: '12px', fontWeight: 700 }}>{price}</div>
+        </div>
+        <div style={{ fontSize: '9px', color: '#111' }}>{d.meta || ''}</div>
+        <div style={{ textAlign: 'center', fontSize: '10px', letterSpacing: '1px' }}>{barcodeText}</div>
+      </div>
+    );
+  }
 
   // When barcodeToPrint changes, ensure we have the product data to render
   // in the hidden print area. If the product isn't present in the current
@@ -3518,60 +3551,52 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
 
       {/* BARCODE PRINT LAYOUT: renders two labels per physical page (10.5cm x 7cm) */}
       <div className="fixed -left-[9999px] top-0 pointer-events-none bg-white">
-        {/* Inject print-specific page size to help printers honor label dimensions */}
-        <style>{`@page { size: 10.5cm 7cm; margin: 0; }
-          @media print { body { margin: 0; } .barcode-print-sheet { page-break-after: always; } }
-        `}</style>
+        {/* Print-specific page size for label sheets: 3.3in width, 1.2in height */}
+        <style>{`@page { size: 3.3in 1.2in; margin: 0; } @media print { body { margin: 0; } .label-sheet { page-break-after: always; } }`}</style>
 
-        <div
-          ref={barcodeRef}
-          className="barcode-print-sheet"
-          style={{
-            width: '10.5cm',
-            height: '7cm',
-            padding: '0cm',
-            boxSizing: 'border-box',
-            display: 'flex',
-            gap: '0.4cm',
-            alignItems: 'center',
-            justifyContent: labelsPerSheet === 1 ? 'center' : 'space-between',
-            background: '#fff',
-            color: '#000'
-          }}
-        >
-          {barcodeToPrint && (() => {
-            const prod = printProduct ?? products.find(p => p.ID.toString() === barcodeToPrint);
-            if (!prod) return null;
-
-            const Label = () => (
-              <div style={{ flex: labelsPerSheet === 1 ? '0 0 auto' : 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <BarcodeComponent
-                  value={String(barcodeToPrint)}
-                  width={1}
-                  height={60}
-                  displayValue={false}
-                  margin={0}
-                />
-                <div style={{ marginTop: '0.15cm', textAlign: 'center' }}>
-                  <div style={{ fontSize: '10px', fontWeight: 700, color: '#0f172a' }}>{prod.Name}</div>
-                  <div style={{ fontSize: '12px', fontWeight: 900, color: '#0f172a' }}>Nu. {Number(prod.Selling).toFixed(2)}</div>
+        {/* barcodeRef is used by react-to-print to capture the HTML to print */}
+        <div ref={barcodeRef} className="label-print-area">
+          {/* If labelsToPrint is present, render pages from it; else fallback to single-product print (existing behavior) */}
+          {labelsToPrint && labelsToPrint.length > 0 ? (
+            // Render pages: chunk labelsToPrint into pairs
+            labelsToPrint.reduce<React.ReactElement[]>((acc, cur, idx) => {
+              if (idx % 2 === 0) {
+                const left = labelsToPrint[idx];
+                const right = labelsToPrint[idx + 1] || {};
+                acc.push(
+                  <div className="label-sheet" key={`sheet-${idx}`} style={{ width: '3.3in', height: '1.2in', display: 'flex', gap: '0.1in', padding: '0.05in 0.1in', boxSizing: 'border-box', alignItems: 'center', justifyContent: 'space-between' }}>
+                    {renderSheetLabel(left)}
+                    {renderSheetLabel(right)}
+                  </div>
+                );
+              }
+              return acc;
+            }, [])
+          ) : (
+            // Existing single barcode print (compatibility)
+            barcodeToPrint && (() => {
+              const prod = printProduct ?? products.find(p => p.ID.toString() === barcodeToPrint);
+              if (!prod) return null;
+              const Label = () => (
+                <div style={{ flex: labelsPerSheet === 1 ? '0 0 auto' : 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <BarcodeComponent value={String(barcodeToPrint)} width={1} height={60} displayValue={false} margin={0} />
+                  <div style={{ marginTop: '0.15cm', textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#0f172a' }}>{prod.Name}</div>
+                    <div style={{ fontSize: '12px', fontWeight: 900, color: '#0f172a' }}>Nu. {Number(prod.Selling).toFixed(2)}</div>
+                  </div>
                 </div>
-              </div>
-            );
+              );
 
-            if (labelsPerSheet === 1) {
-              return <Label />;
-            }
-
-            // default: two labels per sheet
-            return (
-              <>
-                <Label />
-                <div style={{ width: '0.1cm', background: 'transparent' }} />
-                <Label />
-              </>
-            );
-          })()}
+              if (labelsPerSheet === 1) return <div style={{ width: '3.3in', height: '1.2in', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Label /></div>;
+              return (
+                <div style={{ width: '3.3in', height: '1.2in', display: 'flex', gap: '0.1in', padding: '0.05in 0.1in', boxSizing: 'border-box', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Label />
+                  <div style={{ width: '0.1cm', background: 'transparent' }} />
+                  <Label />
+                </div>
+              );
+            })()
+          )}
         </div>
       </div>
     </div>

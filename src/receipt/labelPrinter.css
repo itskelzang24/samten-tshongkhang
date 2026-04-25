@@ -1,0 +1,72 @@
+/* Dual-label layout CSS
+   - Each label: 1.5in (width) x 1in (height)
+   - Page printable width: 3.3in
+   - Two labels are placed side-by-side with small gap and page margins
+*/
+@page {
+  size: 3.3in 1.2in; /* width x height (height slightly larger than 1in to allow small top/bottom margin) */
+  margin: 0;
+}
+
+html, body {
+  width: 3.3in;
+  height: 1.2in;
+  margin: 0;
+  padding: 0;
+}
+
+.page {
+  box-sizing: border-box;
+  width: 3.3in;
+  height: 1.2in;
+  padding: 0.05in 0.1in; /* top/bottom, left/right */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.1in; /* space between the two labels */
+}
+
+.label {
+  box-sizing: border-box;
+  width: 1.5in;
+  height: 1.0in;
+  border: 0.5pt solid #000; /* thin border to help alignment */
+  padding: 0.06in;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: Calibri, Arial, sans-serif;
+  color: #000;
+}
+
+.label .top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.label .name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.label .price {
+  font-size: 12px;
+  font-weight: 700;
+}
+.label .meta {
+  font-size: 9px;
+  color: #111;
+}
+.label .barcode {
+  display: block;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+/* If printing multiple pages, force page-break after each .page */
+.page { page-break-after: always; }
+
+/* Hide any outlines or UI for printing */
+@media print {
+  body { -webkit-print-color-adjust: exact; }
+}
