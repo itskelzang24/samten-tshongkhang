@@ -2823,7 +2823,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
         </div>
           <div style={{ textAlign: 'center', marginTop: '0.01in' }}>
           <div style={{ fontSize: '8.5px', fontWeight: 700, lineHeight: '9px', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
-          <div style={{ fontSize: '9px', fontWeight: 800, lineHeight: '10px', color: '#0f172a' }}>{price}</div>
+          <div style={{ fontSize: '8px', fontWeight: 700, lineHeight: '9px', color: '#0f172a' }}>{price}</div>
         </div>
       </div>
     );
