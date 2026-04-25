@@ -2817,13 +2817,13 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
       <div key={barcodeText + name} style={{ width: '1.5in', height: '1.0in', boxSizing: 'border-box', border: '0.35pt solid #000', padding: '0.03in', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontFamily: 'Calibri, Arial, sans-serif', color: '#000' }}>
         {/* Barcode (small), then compact name and price under it */}
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <React.Suspense fallback={<div style={{height: 28}} />}>
-            <BarcodeComponent value={barcodeText || ''} width={1} height={28} displayValue={false} margin={0} />
+          <React.Suspense fallback={<div style={{height: 22}} />}>
+            <BarcodeComponent value={barcodeText || ''} width={1} height={22} displayValue={false} margin={0} />
           </React.Suspense>
         </div>
-        <div style={{ textAlign: 'center', marginTop: '0.02in' }}>
-          <div style={{ fontSize: '9px', fontWeight: 700, lineHeight: '10px', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
-          <div style={{ fontSize: '10px', fontWeight: 800, lineHeight: '11px', color: '#0f172a' }}>{price}</div>
+          <div style={{ textAlign: 'center', marginTop: '0.01in' }}>
+          <div style={{ fontSize: '8.5px', fontWeight: 700, lineHeight: '9px', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+          <div style={{ fontSize: '9px', fontWeight: 800, lineHeight: '10px', color: '#0f172a' }}>{price}</div>
         </div>
       </div>
     );
