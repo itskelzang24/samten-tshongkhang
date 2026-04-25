@@ -2817,12 +2817,12 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
         {/* Spacer grows to push barcode down toward bottom of label */}
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <React.Suspense fallback={<div style={{height: 24}} />}>
-            <BarcodeComponent value={barcodeText || ''} width={1} height={24} displayValue={false} margin={0} />
+          <React.Suspense fallback={<div style={{height: 28}} />}>
+            <BarcodeComponent value={barcodeText || ''} width={1} height={28} displayValue={false} margin={0} />
           </React.Suspense>
         </div>
         <div style={{ textAlign: 'center', marginTop: '0.01in', marginBottom: '0.01in' }}>
-          <div style={{ fontSize: '10px', fontWeight: 700, lineHeight: '11px', color: '#0f172a' }}>{price}</div>
+          <div style={{ fontSize: '12px', fontWeight: 700, lineHeight: '13px', color: '#0f172a' }}>{price}</div>
         </div>
       </div>
     );
@@ -3585,12 +3585,12 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                   {/* Spacer to push barcode down */}
                   <div style={{ flex: 1 }} />
                   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <React.Suspense fallback={<div style={{height: 24}} />}>
-                      <BarcodeComponent value={String(barcodeToPrint)} width={1} height={24} displayValue={false} margin={0} />
+                    <React.Suspense fallback={<div style={{height: 28}} />}>
+                      <BarcodeComponent value={String(barcodeToPrint)} width={1} height={28} displayValue={false} margin={0} />
                     </React.Suspense>
                   </div>
                   <div style={{ marginTop: '0.01in', marginBottom: '0.01in', textAlign: 'center' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 700, lineHeight: '11px', color: '#0f172a' }}>Nu. {Number(prod.Selling).toFixed(2)}</div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, lineHeight: '13px', color: '#0f172a' }}>Nu. {Number(prod.Selling).toFixed(2)}</div>
                   </div>
                 </div>
               );
