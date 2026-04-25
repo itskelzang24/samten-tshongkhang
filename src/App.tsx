@@ -3581,11 +3581,16 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
               const prod = printProduct ?? products.find(p => p.ID.toString() === barcodeToPrint);
               if (!prod) return null;
               const Label = () => (
-                <div style={{ flex: labelsPerSheet === 1 ? '0 0 auto' : 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <BarcodeComponent value={String(barcodeToPrint)} width={1} height={60} displayValue={false} margin={0} />
-                  <div style={{ marginTop: '0.15cm', textAlign: 'center' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#0f172a' }}>{prod.Name}</div>
-                    <div style={{ fontSize: '12px', fontWeight: 900, color: '#0f172a' }}>Nu. {Number(prod.Selling).toFixed(2)}</div>
+                <div style={{ flex: labelsPerSheet === 1 ? '0 0 auto' : 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', fontFamily: 'Calibri, Arial, sans-serif', color: '#000' }}>
+                  {/* Spacer to push barcode down */}
+                  <div style={{ flex: 1 }} />
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <React.Suspense fallback={<div style={{height: 22}} />}>
+                      <BarcodeComponent value={String(barcodeToPrint)} width={1} height={22} displayValue={false} margin={0} />
+                    </React.Suspense>
+                  </div>
+                  <div style={{ marginTop: '0.01in', marginBottom: '0.01in', textAlign: 'center' }}>
+                    <div style={{ fontSize: '8px', fontWeight: 700, lineHeight: '9px', color: '#0f172a' }}>Nu. {Number(prod.Selling).toFixed(2)}</div>
                   </div>
                 </div>
               );
