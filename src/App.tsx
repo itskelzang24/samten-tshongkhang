@@ -2814,13 +2814,17 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
     const price = prod ? `Nu. ${Number(prod.Selling).toFixed(2)}` : (d.price ? String(d.price) : '');
     const barcodeText = d.barcodeText || (prod ? String(prod.ID) : '');
     return (
-      <div key={barcodeText + name} style={{ width: '1.5in', height: '1.0in', boxSizing: 'border-box', border: '0.5pt solid #000', padding: '0.06in', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontFamily: 'Calibri, Arial, sans-serif', color: '#000' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <div style={{ fontSize: '13px', fontWeight: 600 }}>{name}</div>
-          <div style={{ fontSize: '12px', fontWeight: 700 }}>{price}</div>
+      <div key={barcodeText + name} style={{ width: '1.5in', height: '1.0in', boxSizing: 'border-box', border: '0.35pt solid #000', padding: '0.03in', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontFamily: 'Calibri, Arial, sans-serif', color: '#000' }}>
+        {/* Barcode (small), then compact name and price under it */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <React.Suspense fallback={<div style={{height: 28}} />}>
+            <BarcodeComponent value={barcodeText || ''} width={1} height={28} displayValue={false} margin={0} />
+          </React.Suspense>
         </div>
-        <div style={{ fontSize: '9px', color: '#111' }}>{d.meta || ''}</div>
-        <div style={{ textAlign: 'center', fontSize: '10px', letterSpacing: '1px' }}>{barcodeText}</div>
+        <div style={{ textAlign: 'center', marginTop: '0.02in' }}>
+          <div style={{ fontSize: '9px', fontWeight: 700, lineHeight: '10px', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+          <div style={{ fontSize: '10px', fontWeight: 800, lineHeight: '11px', color: '#0f172a' }}>{price}</div>
+        </div>
       </div>
     );
   }
