@@ -2781,6 +2781,32 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
   type LabelData = { productId?: string; name?: string; price?: string | number; meta?: string; barcodeText?: string };
   const [labelsToPrint, setLabelsToPrint] = useState<LabelData[] | null>(null);
 
+  // Digit-to-letter mapping for automatic item Code generation from cost price
+  const digitMap: Record<string, string> = {
+    '1': 'D', '2': 'U', '3': 'N', '4': 'L', '5': 'O',
+    '6': 'P', '7': 'T', '8': 'Y', '9': 'R', '0': 'E'
+  };
+
+  const generateItemCode = (cost: number | string | undefined | null) => {
+    if (cost === undefined || cost === null || cost === '') return '';
+    const n = Number(cost);
+    if (isNaN(n)) return '';
+    // If cost is integer (no fractional part), use integer digits only.
+    // If cost has cents, preserve two decimal digits (e.g. 19.87 -> '1987').
+    let digits: string;
+    if (Math.abs(n - Math.round(n)) < 1e-9) {
+      digits = String(Math.round(n));
+    } else {
+      digits = String(n.toFixed(2)).replace('.', '');
+    }
+    // Strip any non-digit characters just in case
+    digits = digits.replace(/[^0-9]/g, '');
+    return digits.split('').map(d => digitMap[d] || '').join('');
+  };
+
+  // Live code preview in Add Product modal (updates as cost price is typed)
+  const [previewCode, setPreviewCode] = useState('');
+
   // Inventory search state (search by ID or Name)
   const [inventorySearch, setInventorySearch] = useState('');
 
@@ -2813,18 +2839,14 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
     const price = prod ? `Nu. ${Number(prod.Selling).toFixed(2)}` : (d.price ? String(d.price) : '');
     const barcodeText = d.barcodeText || (prod ? String(prod.ID) : '');
     return (
-      <div key={barcodeText} style={{ width: '1.5in', height: '1.0in', boxSizing: 'border-box', border: '0.35pt solid #000', padding: '0.02in', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', fontFamily: 'Calibri, Arial, sans-serif', color: '#000' }}>
-        {/* Spacer grows to push barcode down toward bottom of label */}
-        <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
-          <React.Suspense fallback={<div style={{height: 28}} />}>
-            <BarcodeComponent value={barcodeText || ''} width={1} height={28} displayValue={false} margin={0} />
-          </React.Suspense>
-          {/* 12px spacing between barcode and price */}
-          <div style={{ height: '12px' }} />
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '20px', fontWeight: 700, lineHeight: '22px', color: '#0f172a' }}>{price}</div>
-          </div>
+      <div key={barcodeText} style={{ width: '1.5in', height: '1.0in', boxSizing: 'border-box', overflow: 'hidden', breakInside: 'avoid', border: '0.35pt solid #000', padding: '0.02in', paddingTop: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', fontFamily: 'Calibri, Arial, sans-serif', color: '#000' }}>
+        <React.Suspense fallback={<div style={{height: 22}} />}>
+          <BarcodeComponent value={barcodeText || ''} width={1} height={22} displayValue={false} margin={0} />
+        </React.Suspense>
+        <div style={{ height: '3px' }} />
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '13px', fontWeight: 600, lineHeight: '15px', color: '#0f172a', marginBottom: '2px' }}>{generateItemCode(prod?.Cost)}</div>
+          <div style={{ fontSize: '13px', fontWeight: 700, lineHeight: '15px', color: '#0f172a' }}>{price}</div>
         </div>
       </div>
     );
@@ -2924,6 +2946,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
       Unit: String(formData.get('pUnit') || 'Pcs'),
       Cost: parseNum(formData.get('pCost'), 0),
       Selling: parseNum(formData.get('pSell'), 0),
+      Code: generateItemCode(parseNum(formData.get('pCost'), 0)),
       Stock: parseNum(formData.get('pStock'), 0),
       MinStock: parseNum(formData.get('pMin'), 0),
       Vendor: String(formData.get('pVendor') || 'General')
@@ -3071,6 +3094,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
             <thead>
               <tr className="text-left text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-100 bg-slate-50/50">
                 <th className="px-6 py-4">ID / Barcode</th>
+                <th className="px-6 py-4">Code</th>
                 <th className="px-6 py-4">Product Name</th>
                 <th className="px-6 py-4">Category</th>
                 <th className="px-6 py-4 text-right">Cost</th>
@@ -3129,6 +3153,9 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                         </div>
                         <span className="font-mono text-[10px] text-slate-500 font-bold">{p.ID}</span>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="font-mono text-sm font-bold">{p.Code || generateItemCode(p.Cost)}</div>
                     </td>
                     <td className="px-6 py-4">
                       <p className="font-bold text-slate-800">{p.Name}</p>
@@ -3344,8 +3371,18 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                   <label htmlFor="pCost" className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Cost Price</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₹</span>
-                    <input id="pCost" name="pCost" required type="number" step="0.01" className="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium" />
+                    <input
+                      id="pCost" name="pCost" required type="number" step="0.01"
+                      className="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand/10 focus:border-brand outline-none transition-all text-sm font-medium"
+                      onChange={(e) => setPreviewCode(generateItemCode(e.target.value))}
+                    />
                   </div>
+                  {previewCode && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Auto Code:</span>
+                      <span className="px-2 py-0.5 bg-brand-light border border-brand-border text-brand text-xs font-black rounded-md font-mono tracking-widest">{previewCode}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -3432,6 +3469,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                   Unit: (formData.get('eUnit') as string) || editProduct.Unit,
                   Cost: cost,
                   Selling: selling,
+                  Code: generateItemCode(cost),
                   Stock: newStock,
                   MinStock: minStock,
                   Vendor: vendor
@@ -3569,7 +3607,7 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
                 const left = labelsToPrint[idx];
                 const right = labelsToPrint[idx + 1] || {};
                   acc.push(
-                  <div className="label-sheet" key={`sheet-${idx}`} style={{ width: '3.3in', height: '1.2in', display: 'flex', gap: '0.1in', padding: '0.05in 0.1in', boxSizing: 'border-box', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+                  <div className="label-sheet" key={`sheet-${idx}`} style={{ width: '3.3in', height: '1.2in', display: 'flex', gap: '0.1in', padding: '0.05in 0.1in', boxSizing: 'border-box', alignItems: 'center', justifyContent: 'space-between' }}>
                     {renderSheetLabel(left)}
                     {renderSheetLabel(right)}
                   </div>
@@ -3583,24 +3621,21 @@ function InventoryTab({ products, onRefresh, currentUser }: { products: Product[
               const prod = printProduct ?? products.find(p => p.ID.toString() === barcodeToPrint);
               if (!prod) return null;
               const Label = () => (
-                <div style={{ flex: labelsPerSheet === 1 ? '0 0 auto' : 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', fontFamily: 'Calibri, Arial, sans-serif', color: '#000' }}>
-                  {/* Spacer to push barcode down */}
-                  <div style={{ flex: 1 }} />
-                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
-                    <React.Suspense fallback={<div style={{height: 28}} />}>
-                      <BarcodeComponent value={String(barcodeToPrint)} width={1} height={28} displayValue={false} margin={0} />
-                    </React.Suspense>
-                    <div style={{ height: '12px' }} />
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '20px', fontWeight: 700, lineHeight: '22px', color: '#0f172a' }}>Nu. {Number(prod.Selling).toFixed(2)}</div>
-                    </div>
+                <div style={{ width: '1.5in', height: '1.0in', boxSizing: 'border-box', overflow: 'hidden', breakInside: 'avoid', paddingTop: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Calibri, Arial, sans-serif', color: '#000' }}>
+                  <React.Suspense fallback={<div style={{height: 22}} />}>
+                    <BarcodeComponent value={String(barcodeToPrint)} width={1} height={22} displayValue={false} margin={0} />
+                  </React.Suspense>
+                  <div style={{ height: '3px' }} />
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, lineHeight: '15px', color: '#0f172a', marginBottom: '2px' }}>{generateItemCode(prod.Cost)}</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, lineHeight: '15px', color: '#0f172a' }}>Nu. {Number(prod.Selling).toFixed(2)}</div>
                   </div>
                 </div>
               );
 
-              if (labelsPerSheet === 1) return <div style={{ width: '3.3in', height: '1.2in', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}><Label /></div>;
+              if (labelsPerSheet === 1) return <div style={{ width: '3.3in', height: '1.2in', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Label /></div>;
               return (
-                <div style={{ width: '3.3in', height: '1.2in', display: 'flex', gap: '0.1in', padding: '0.05in 0.1in', boxSizing: 'border-box', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+                <div style={{ width: '3.3in', height: '1.2in', overflow: 'hidden', display: 'flex', gap: '0.1in', padding: '0.05in 0.1in', boxSizing: 'border-box', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Label />
                   <div style={{ width: '0.1cm', background: 'transparent' }} />
                   <Label />
